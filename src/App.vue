@@ -72,37 +72,6 @@ const recentPosts = ref([
     date: '2026-07-15',
   },
 ])
-
-const portfolioItems = ref([
-  {
-    title: '项目名称',
-    description: '简短的项目描述，说明这个项目做了什么',
-    tags: ['Vue', 'JavaScript'],
-    accent: '#aa3bff',
-    detail: '这是第一个项目的详细说明。可以在这里写更多内容，包括技术栈、实现思路、遇到的问题和解决方案等。这些内容在轮播时不会显示，只有点击翻转后才能看到。',
-  },
-  {
-    title: '项目名称',
-    description: '简短的项目描述，说明这个项目做了什么',
-    tags: ['React', 'TypeScript'],
-    accent: '#3b82f6',
-    detail: '这是第二个项目的详细说明。可以在这里写更多内容，包括技术栈、实现思路、遇到的问题和解决方案等。这些内容在轮播时不会显示，只有点击翻转后才能看到。',
-  },
-  {
-    title: '项目名称',
-    description: '简短的项目描述，说明这个项目做了什么',
-    tags: ['Node.js', 'Express'],
-    accent: '#10b981',
-    detail: '这是第三個项目的详细说明。可以在这里写更多内容，包括技术栈、实现思路、遇到的问题和解决方案等。这些内容在轮播时不会显示，只有点击翻转后才能看到。',
-  },
-  {
-    title: '项目名称',
-    description: '简短的项目描述，说明这个项目做了什么',
-    tags: ['Python', 'Django'],
-    accent: '#f59e0b',
-    detail: '这是第四个项目的详细说明。可以在这里写更多内容，包括技术栈、实现思路、遇到的问题和解决方案等。这些内容在轮播时不会显示，只有点击翻转后才能看到。',
-  },
-])
 </script>
 
 <template>
@@ -144,10 +113,10 @@ const portfolioItems = ref([
 
     <!-- Hero 横幅 -->
     <section class="hero">
-      <p class="hero-tag">个人博客 & 作品集</p>
+      <p class="hero-tag">欢迎您</p>
       <h1 class="hero-title">你好，我是<br /><span class="accent">吴俊林</span></h1>
       <p class="hero-desc">
-        这里是一句简短的个人简介，描述你擅长的领域、正在做的事情，或者你想传达的理念。
+        这里是我的个人网站，展示我的作品，我希望用这个网站来分享我的想法和创作，同时这个网站也是我的求职网站，虽然还在完善中，但我希望它能成为我职业发展的一个有力帮助。
       </p>
       <div class="hero-actions">
         <a href="#posts" class="btn btn-primary">浏览文章</a>
@@ -174,7 +143,7 @@ const portfolioItems = ref([
     <section id="portfolio" class="section section-alt">
       <div class="section-inner">
         <h2 class="section-title">作品展示</h2>
-        <PortfolioCarousel :items="portfolioItems" />
+        <PortfolioCarousel />
       </div>
     </section>
 

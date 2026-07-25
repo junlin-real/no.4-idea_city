@@ -1,10 +1,9 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import Project_Card from './Project_Card.vue'
+import { portfolioItems } from './projects.js'
 
-const props = defineProps({
-  items: Array,
-})
+const items = portfolioItems
 
 // 整体旋转角度（连续值，所有卡片一起转）
 const rotation = ref(0)
@@ -161,7 +160,7 @@ function toggleFlip() {
   flipped.value = !flipped.value
 }
 
-watch(() => props.items.length, () => {
+watch(() => items.length, () => {
   rotation.value = 0
   startAuto()
 })
