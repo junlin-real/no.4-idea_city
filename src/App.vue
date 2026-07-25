@@ -3,9 +3,21 @@ import { ref } from 'vue'
 import Light from './components/Light.vue'
 import Dark_more from './components/Dark_more.vue'
 import DroneGame from './components/DroneGame.vue'
+import PortfolioCarousel from './components/PortfolioCarousel.vue'
+import loding from './components/loding.vue'
+
+const loadingDone = ref(false)
+const loadingMode = ref('day')
+const transitioning = ref(false) // 是否正在播放切换动画
+
+// Restore dark mode class from localStorage (but loading is always 'day' on refresh)
+if (localStorage.getItem('theme') === 'dark') {
+  document.documentElement.classList.add('dark-mode')
+}
 
 const leftBroken = ref(false)
 const rightBroken = ref(false)
+const bulbKey = ref(0)
 
 function onLeftBroken() {
   leftBroken.value = true
@@ -19,8 +31,24 @@ function onRightBroken() {
 
 function checkBothBroken() {
   if (leftBroken.value && rightBroken.value) {
-    document.documentElement.classList.add('dark-mode')
+    // Trigger night loading animation
+    loadingMode.value = 'night'
+    transitioning.value = true
+    loadingDone.value = false
   }
+}
+
+function onTransitionDone() {
+  transitioning.value = false
+  document.documentElement.classList.add('dark-mode')
+  localStorage.setItem('theme', 'dark')
+}
+
+function onSwitchToLight() {
+  leftBroken.value = false
+  rightBroken.value = false
+  bulbKey.value++
+  localStorage.setItem('theme', 'light')
 }
 
 const navLinks = [
@@ -53,32 +81,42 @@ const portfolioItems = ref([
     description: '简短的项目描述，说明这个项目做了什么',
     tags: ['Vue', 'JavaScript'],
     accent: '#aa3bff',
+    detail: '这是第一个项目的详细说明。可以在这里写更多内容，包括技术栈、实现思路、遇到的问题和解决方案等。这些内容在轮播时不会显示，只有点击翻转后才能看到。',
   },
   {
     title: '项目名称',
     description: '简短的项目描述，说明这个项目做了什么',
     tags: ['React', 'TypeScript'],
     accent: '#3b82f6',
+    detail: '这是第二个项目的详细说明。可以在这里写更多内容，包括技术栈、实现思路、遇到的问题和解决方案等。这些内容在轮播时不会显示，只有点击翻转后才能看到。',
   },
   {
     title: '项目名称',
     description: '简短的项目描述，说明这个项目做了什么',
     tags: ['Node.js', 'Express'],
     accent: '#10b981',
+    detail: '这是第三個项目的详细说明。可以在这里写更多内容，包括技术栈、实现思路、遇到的问题和解决方案等。这些内容在轮播时不会显示，只有点击翻转后才能看到。',
   },
   {
     title: '项目名称',
     description: '简短的项目描述，说明这个项目做了什么',
     tags: ['Python', 'Django'],
     accent: '#f59e0b',
+    detail: '这是第四个项目的详细说明。可以在这里写更多内容，包括技术栈、实现思路、遇到的问题和解决方案等。这些内容在轮播时不会显示，只有点击翻转后才能看到。',
   },
 ])
 </script>
 
 <template>
   <div class="site">
+    <!-- 加载动画 -->
+    <loding
+      v-if="!loadingDone || transitioning"
+      :mode="loadingMode"
+      @done="transitioning ? onTransitionDone() : loadingDone = true"
+    />
     <!-- 星空背景 -->
-    <Dark_more />
+    <Dark_more @switchToLight="onSwitchToLight" />
 
     <!-- 无人机石头大战 -->
     <DroneGame />
@@ -86,10 +124,10 @@ const portfolioItems = ref([
     <!-- 灯泡层 -->
     <div class="bulb-layer">
       <div class="bulb-left">
-        <Light @broken="onLeftBroken" />
+        <Light :key="'left-' + bulbKey" @broken="onLeftBroken" />
       </div>
       <div class="bulb-right">
-        <Light @broken="onRightBroken" />
+        <Light :key="'right-' + bulbKey" @broken="onRightBroken" />
       </div>
     </div>
 
@@ -137,22 +175,7 @@ const portfolioItems = ref([
     <section id="portfolio" class="section section-alt">
       <div class="section-inner">
         <h2 class="section-title">作品展示</h2>
-        <div class="portfolio-grid">
-          <div v-for="item in portfolioItems" :key="item.title" class="portfolio-card">
-            <div class="portfolio-cover" :style="{ background: item.accent + '15' }">
-              <div class="portfolio-icon" :style="{ background: item.accent }">
-                {{ item.title[0] }}
-              </div>
-            </div>
-            <div class="portfolio-body">
-              <h3 class="portfolio-title">{{ item.title }}</h3>
-              <p class="portfolio-desc">{{ item.description }}</p>
-              <div class="portfolio-tags">
-                <span v-for="tag in item.tags" :key="tag" class="tag">{{ tag }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PortfolioCarousel :items="portfolioItems" />
       </div>
     </section>
 
@@ -401,77 +424,6 @@ const portfolioItems = ref([
   text-decoration: underline;
 }
 
-/* ===== 作品卡片 ===== */
-.portfolio-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
-}
-
-.portfolio-card {
-  border-radius: 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  overflow: hidden;
-  transition: box-shadow 0.2s, transform 0.2s, background-color 0.4s ease, border-color 0.4s ease;
-}
-
-.portfolio-card:hover {
-  box-shadow: var(--shadow);
-  transform: translateY(-2px);
-}
-
-.portfolio-cover {
-  height: 160px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.portfolio-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.portfolio-body {
-  padding: 24px;
-}
-
-.portfolio-title {
-  font-size: 18px;
-  margin: 0 0 8px;
-  color: var(--text-h);
-}
-
-.portfolio-desc {
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--text);
-  margin: 0 0 16px;
-}
-
-.portfolio-tags {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.tag {
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: var(--code-bg);
-  color: var(--text);
-  transition: background-color 0.4s ease, color 0.4s ease;
-}
-
 /* ===== 页脚 ===== */
 .footer {
   margin-top: auto;
@@ -525,10 +477,6 @@ const portfolioItems = ref([
   }
 
   .posts-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .portfolio-grid {
     grid-template-columns: 1fr;
   }
 

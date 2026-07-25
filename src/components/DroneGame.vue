@@ -1,7 +1,7 @@
 <template>
   <!-- 召唤按钮（仅白天模式） -->
   <button v-if="!isDark" class="drone-summon-btn" @click="summonDrone">
-    🛸 召唤无人机
+    🛸 小游戏
   </button>
 
   <!-- 拍照闪光遮罩 -->
@@ -9,74 +9,75 @@
     <div v-if="showFlash" class="flash-overlay" />
   </Transition>
 
-  <!-- 无人机（仅白天模式） -->
-  <template v-if="!isDark">
-    <div
-      v-for="d in drones"
-      :key="d.id"
-      class="drone"
-      :class="{ falling: d.falling }"
-      :style="droneStyle(d)"
-      @mousedown.prevent="onDroneGrab($event, d)"
-      @click.stop="takePhoto(d)"
-    >
-      <div class="drone-body" :class="{ broken: d.falling }">
-        <div class="drone-top" />
-        <div class="drone-center" />
-        <div class="drone-leg l1" /><div class="drone-leg l2" />
-        <div class="drone-leg l3" /><div class="drone-leg l4" />
-        <div class="drone-cam" />
+  <Teleport to="body">
+    <!-- 无人机（仅白天模式） -->
+    <template v-if="!isDark">
+      <div
+        v-for="d in drones"
+        :key="d.id"
+        class="drone"
+        :class="{ falling: d.falling }"
+        :style="droneStyle(d)"
+        @mousedown.prevent="onDroneMouseDown($event, d)"
+      >
+        <div class="drone-body" :class="{ broken: d.falling }">
+          <div class="drone-top" />
+          <div class="drone-center" />
+          <div class="drone-leg l1" /><div class="drone-leg l2" />
+          <div class="drone-leg l3" /><div class="drone-leg l4" />
+          <div class="drone-cam" />
+        </div>
       </div>
-    </div>
-  </template>
+    </template>
 
-  <!-- 大炮（召唤后出现，仅白天模式） -->
-  <template v-if="cannonVisible && !isDark">
-    <div class="cannon" :class="{ firing: throwing }" :style="cannonStyle">
-      <div class="cannon-wheel left" />
-      <div class="cannon-wheel right" />
-      <div class="cannon-body">
-        <div class="cannon-barrel" :style="barrelStyle" />
-        <div class="cannon-muzzle" :style="muzzleStyle" />
-        <div class="cannon-ring" />
+    <!-- 大炮（召唤后出现，仅白天模式） -->
+    <template v-if="cannonVisible && !isDark">
+      <div class="cannon" :class="{ firing: throwing }" :style="cannonStyle">
+        <div class="cannon-wheel left" />
+        <div class="cannon-wheel right" />
+        <div class="cannon-body">
+          <div class="cannon-barrel" :style="barrelStyle" />
+          <div class="cannon-muzzle" :style="muzzleStyle" />
+          <div class="cannon-ring" />
+        </div>
+        <!-- 炮口闪光 -->
+        <div v-if="muzzleFlash" class="muzzle-flash" :style="muzzleFlashStyle" />
       </div>
-      <!-- 炮口闪光 -->
-      <div v-if="muzzleFlash" class="muzzle-flash" :style="muzzleFlashStyle" />
-    </div>
 
-    <!-- 大炮交互区域 -->
-    <div class="cannon-hitarea" @mousedown.prevent="onCannonGrab" />
+      <!-- 大炮交互区域 -->
+      <div class="cannon-hitarea" @mousedown.prevent="onCannonGrab" />
 
-    <!-- 瞄准线 -->
-    <svg v-if="throwing" class="aim-line">
-      <defs>
-        <marker id="aimDot" markerWidth="6" markerHeight="6" refX="3" refY="3">
-          <circle cx="3" cy="3" r="2.5" :fill="aimColor" />
-        </marker>
-      </defs>
-      <line
-        :x1="cannonMouth.x" :y1="cannonMouth.y"
-        :x2="aimEnd.x" :y2="aimEnd.y"
-        :stroke="aimColor" stroke-width="2.5" stroke-dasharray="8 5"
-        marker-end="url(#aimDot)" opacity="0.8"
+      <!-- 瞄准线 -->
+      <svg v-if="throwing" class="aim-line">
+        <defs>
+          <marker id="aimDot" markerWidth="6" markerHeight="6" refX="3" refY="3">
+            <circle cx="3" cy="3" r="2.5" :fill="aimColor" />
+          </marker>
+        </defs>
+        <line
+          :x1="cannonMouth.x" :y1="cannonMouth.y"
+          :x2="aimEnd.x" :y2="aimEnd.y"
+          :stroke="aimColor" stroke-width="2.5" stroke-dasharray="8 5"
+          marker-end="url(#aimDot)" opacity="0.8"
+        />
+        <!-- 力度指示圆环 -->
+        <circle
+          :cx="cannonMouth.x" :cy="cannonMouth.y"
+          :r="pullPower * 0.6 + 10"
+          fill="none" :stroke="aimColor" stroke-width="1.5"
+          stroke-dasharray="4 3" opacity="0.4"
+        />
+      </svg>
+
+      <!-- 飞行中的石头 -->
+      <div
+        v-for="s in flyingStones"
+        :key="s.id"
+        class="flying-stone"
+        :style="{ left: s.x + 'px', top: s.y + 'px' }"
       />
-      <!-- 力度指示圆环 -->
-      <circle
-        :cx="cannonMouth.x" :cy="cannonMouth.y"
-        :r="pullPower * 0.6 + 10"
-        fill="none" :stroke="aimColor" stroke-width="1.5"
-        stroke-dasharray="4 3" opacity="0.4"
-      />
-    </svg>
-
-    <!-- 飞行中的石头 -->
-    <div
-      v-for="s in flyingStones"
-      :key="s.id"
-      class="flying-stone"
-      :style="{ left: s.x + 'px', top: s.y + 'px' }"
-    />
-  </template>
+    </template>
+  </Teleport>
 </template>
 
 <script setup>
@@ -102,6 +103,37 @@ function checkDark() {
 const drones = reactive([])
 let droneIdCounter = 0
 let droneBodies = new Map()
+
+// ==================== 自主移动 ====================
+const DRONE_SPEED = 1.5
+const DRONE_FRICTION = 0.993
+
+function updateDroneMovement() {
+  for (const d of drones) {
+    if (d.falling || d.grabbing) continue
+    if (d.vx === undefined) {
+      d.vx = (Math.random() - 0.5) * 6
+      d.moveTimer = 0
+      d.dir = Math.random() > 0.5 ? 1 : -1
+    }
+    // 定时换方向
+    d.moveTimer--
+    if (d.moveTimer <= 0) {
+      d.dir = -d.dir
+      d.moveTimer = 150 + Math.random() * 200
+    }
+    // 持续加速
+    d.vx += d.dir * DRONE_SPEED * 0.05
+    d.vx *= DRONE_FRICTION
+    d.vx = Math.max(-DRONE_SPEED, Math.min(DRONE_SPEED, d.vx))
+    // 边界反弹
+    if (d.x <= 30) { d.x = 30; d.dir = 1; d.moveTimer = 100 + Math.random() * 100 }
+    if (d.x >= window.innerWidth - 30) { d.x = window.innerWidth - 30; d.dir = -1; d.moveTimer = 100 + Math.random() * 100 }
+    d.x += d.vx
+    const body = droneBodies.get(d.id)
+    if (body) Body.setPosition(body, { x: d.x, y: d.y })
+  }
+}
 
 // ==================== 拍照闪光 ====================
 const showFlash = ref(false)
@@ -165,8 +197,13 @@ function droneStyle(d) {
 }
 
 // ==================== 无人机拖拽 ====================
-function onDroneGrab(e, d) {
+let droneMouseDownPos = null
+let droneMouseDownTime = 0
+
+function onDroneMouseDown(e, d) {
   if (d.falling) return
+  droneMouseDownPos = { x: e.clientX, y: e.clientY }
+  droneMouseDownTime = Date.now()
   d.grabbing = true
   d.grabOffsetX = e.clientX - d.x
   d.grabOffsetY = e.clientY - d.y
@@ -184,8 +221,21 @@ function moveDrone(e) {
 
 function releaseDrone() {
   for (const d of drones) {
-    d.grabbing = false
+    if (d.grabbing) {
+      // 判断是否为点击（未移动且时间短）
+      if (droneMouseDownPos) {
+        const dx = d.x - (droneMouseDownPos.x - d.grabOffsetX)
+        const dy = d.y - (droneMouseDownPos.y - d.grabOffsetY)
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        const elapsed = Date.now() - droneMouseDownTime
+        if (dist < 5 && elapsed < 300) {
+          takePhoto(d)
+        }
+      }
+      d.grabbing = false
+    }
   }
+  droneMouseDownPos = null
 }
 
 // ==================== 大炮 ====================
@@ -382,6 +432,7 @@ function physicsLoop() {
     }
   }
 
+  updateDroneMovement()
   updateDroneFalls()
   animFrame = requestAnimationFrame(physicsLoop)
 }
