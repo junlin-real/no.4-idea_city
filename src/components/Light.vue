@@ -6,6 +6,7 @@ const emit = defineEmits(['broken'])
 const clickCount = ref(0)
 const isBreaking = ref(false)
 const isBroken = ref(false)
+const isShaking = ref(false)
 
 const fragments = reactive([])
 
@@ -27,9 +28,17 @@ function createFragments() {
   }
 }
 
+function triggerShake() {
+  isShaking.value = true
+  setTimeout(() => { isShaking.value = false }, 300)
+}
+
 function handleClick() {
   if (isBroken.value || isBreaking.value) return
+
   clickCount.value++
+  triggerShake()
+
   if (clickCount.value >= 3) {
     isBreaking.value = true
     createFragments()
@@ -45,7 +54,7 @@ function handleClick() {
 <template>
   <button class="bulb-btn" :class="{ broken: isBroken }" @click="handleClick" aria-label="灯泡">
     <!-- 正常灯泡 -->
-    <svg v-if="!isBroken" class="bulb-svg" :class="{ shaking: isBreaking }" viewBox="0 0 64 64" fill="none">
+    <svg v-if="!isBroken" class="bulb-svg" :class="{ shaking: isShaking || isBreaking }" viewBox="0 0 64 64" fill="none">
       <circle cx="32" cy="26" r="18" fill="#FFE066" opacity="0.25" class="bulb-glow" />
       <path d="M32 8C22.06 8 14 16.06 14 26c0 6.63 3.61 12.41 9 15.52V48a2 2 0 002 2h14a2 2 0 002-2v-6.48c5.39-3.11 9-8.89 9-15.52C49 16.06 40.94 8 32 8z" fill="#FFD43B" stroke="#E6A800" stroke-width="1.5"/>
       <rect x="26" y="50" width="12" height="3" rx="1.5" fill="#B0B0B0" stroke="#999" stroke-width="1"/>
@@ -122,9 +131,9 @@ function handleClick() {
   50% { opacity: 0.4; r: 20; }
 }
 
-/* 破裂抖动 */
+/* 点击抖动 */
 .shaking {
-  animation: shake 0.15s ease-in-out 4;
+  animation: shake 0.08s ease-in-out 4;
 }
 
 @keyframes shake {

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import Light from './components/Light.vue'
 import Dark_more from './components/Dark_more.vue'
+import DroneGame from './components/DroneGame.vue'
 
 const leftBroken = ref(false)
 const rightBroken = ref(false)
@@ -78,6 +79,9 @@ const portfolioItems = ref([
   <div class="site">
     <!-- 星空背景 -->
     <Dark_more />
+
+    <!-- 无人机石头大战 -->
+    <DroneGame />
 
     <!-- 灯泡层 -->
     <div class="bulb-layer">
