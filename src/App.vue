@@ -8,12 +8,10 @@ import loding from './components/loding.vue'
 
 const loadingDone = ref(false)
 const loadingMode = ref('day')
+const loadingKey = ref(0)
 const transitioning = ref(false) // 是否正在播放切换动画
 
-// Restore dark mode class from localStorage (but loading is always 'day' on refresh)
-if (localStorage.getItem('theme') === 'dark') {
-  document.documentElement.classList.add('dark-mode')
-}
+// 每次刷新都从白昼模式开始
 
 const leftBroken = ref(false)
 const rightBroken = ref(false)
@@ -33,6 +31,7 @@ function checkBothBroken() {
   if (leftBroken.value && rightBroken.value) {
     // Trigger night loading animation
     loadingMode.value = 'night'
+    loadingKey.value++
     transitioning.value = true
     loadingDone.value = false
   }
@@ -41,14 +40,13 @@ function checkBothBroken() {
 function onTransitionDone() {
   transitioning.value = false
   document.documentElement.classList.add('dark-mode')
-  localStorage.setItem('theme', 'dark')
 }
 
 function onSwitchToLight() {
   leftBroken.value = false
   rightBroken.value = false
+  loadingDone.value = false
   bulbKey.value++
-  localStorage.setItem('theme', 'light')
 }
 
 const navLinks = [
@@ -112,6 +110,7 @@ const portfolioItems = ref([
     <!-- 加载动画 -->
     <loding
       v-if="!loadingDone || transitioning"
+      :key="loadingKey"
       :mode="loadingMode"
       @done="transitioning ? onTransitionDone() : loadingDone = true"
     />

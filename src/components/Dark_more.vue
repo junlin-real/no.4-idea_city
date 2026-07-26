@@ -138,10 +138,6 @@ function handleClick() {
 }
 
 onMounted(() => {
-  // Restore theme from localStorage
-  if (localStorage.getItem('theme') === 'dark') {
-    document.documentElement.classList.add('dark-mode')
-  }
   checkDark()
   const observer = new MutationObserver(checkDark)
   observer.observe(document.documentElement, {
