@@ -4,12 +4,14 @@ import Light from './components/Light.vue'
 import Dark_more from './components/Dark_more.vue'
 import DroneGame from './components/DroneGame.vue'
 import PortfolioCarousel from './components/PortfolioCarousel.vue'
+import HyperCube from './components/HyperCube.vue'
 import loding from './components/loding.vue'
 
 const loadingDone = ref(false)
 const loadingMode = ref('day')
 const loadingKey = ref(0)
 const transitioning = ref(false) // 是否正在播放切换动画
+const gameVisible = ref(true)    // 控制小游戏组件挂载/销毁
 
 // 每次刷新都从白昼模式开始
 
@@ -29,7 +31,8 @@ function onRightBroken() {
 
 function checkBothBroken() {
   if (leftBroken.value && rightBroken.value) {
-    // Trigger night loading animation
+    gameVisible.value = false
+    document.documentElement.classList.add('dark-mode')
     loadingMode.value = 'night'
     loadingKey.value++
     transitioning.value = true
@@ -39,14 +42,16 @@ function checkBothBroken() {
 
 function onTransitionDone() {
   transitioning.value = false
-  document.documentElement.classList.add('dark-mode')
+  loadingDone.value = true
 }
 
 function onSwitchToLight() {
   leftBroken.value = false
   rightBroken.value = false
   loadingDone.value = false
+  loadingMode.value = 'day'
   bulbKey.value++
+  gameVisible.value = true
 }
 
 const navLinks = [
@@ -87,7 +92,7 @@ const recentPosts = ref([
     <Dark_more @switchToLight="onSwitchToLight" />
 
     <!-- 无人机石头大战 -->
-    <DroneGame />
+    <DroneGame v-if="gameVisible" />
 
     <!-- 灯泡层 -->
     <div class="bulb-layer">
@@ -102,7 +107,7 @@ const recentPosts = ref([
     <!-- 导航栏 -->
     <header class="navbar">
       <div class="navbar-inner">
-        <a href="#" class="logo">YourName</a>
+        <a href="#" class="logo">Welcome</a>
         <nav class="nav-links">
           <a v-for="link in navLinks" :key="link.label" :href="link.href" class="nav-link">
             {{ link.label }}
@@ -113,14 +118,21 @@ const recentPosts = ref([
 
     <!-- Hero 横幅 -->
     <section class="hero">
-      <p class="hero-tag">欢迎您</p>
-      <h1 class="hero-title">你好，我是<br /><span class="accent">吴俊林</span></h1>
-      <p class="hero-desc">
-        这里是我的个人网站，展示我的作品，我希望用这个网站来分享我的想法和创作，同时这个网站也是我的求职网站，虽然还在完善中，但我希望它能成为我职业发展的一个有力帮助。
-      </p>
-      <div class="hero-actions">
-        <a href="#posts" class="btn btn-primary">浏览文章</a>
-        <a href="#portfolio" class="btn btn-secondary">查看作品</a>
+      <div class="hero-layout">
+        <div class="hero-left">
+          <HyperCube />
+        </div>
+        <div class="hero-right">
+          <p class="hero-tag">欢迎您</p>
+          <h1 class="hero-title">你好，我是<br /><span class="accent">JunLin</span></h1>
+          <p class="hero-desc">
+            这里是我的个人网站，我希望用这个网站来分享我的想法和创作，同时这个网站也是我的求职网站，虽然还在完善中，但我希望它能成为我职业发展的见证。
+          </p>
+          <div class="hero-actions">
+            <a href="#posts" class="btn btn-primary">浏览文章</a>
+            <a href="#portfolio" class="btn btn-secondary">查看作品</a>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -245,12 +257,26 @@ const recentPosts = ref([
 .hero {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 100px 24px 80px;
-  text-align: center;
+  padding: 80px 24px 80px;
+}
+
+.hero-layout {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+}
+
+.hero-left {
+  flex: 0 0 300px;
+}
+
+.hero-right {
+  flex: 1;
+  min-width: 0;
 }
 
 .hero-tag {
-  font-size: 14px;
+  font-size: 30px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--accent);
@@ -258,7 +284,7 @@ const recentPosts = ref([
 }
 
 .hero-title {
-  font-size: 52px;
+  font-size: 45px;
   line-height: 1.2;
   letter-spacing: -1.5px;
   margin: 0 0 20px;
@@ -433,7 +459,22 @@ const recentPosts = ref([
 /* ===== 响应式 ===== */
 @media (max-width: 768px) {
   .hero {
-    padding: 60px 20px 50px;
+    padding: 40px 20px 50px;
+  }
+
+  .hero-layout {
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .hero-left {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .hero-right {
+    text-align: center;
   }
 
   .hero-title {
