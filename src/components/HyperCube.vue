@@ -263,7 +263,8 @@ function render() {
     projected3D.push([v.x * wScale, v.y * wScale, v.z * wScale])
   }
 
-  const scale = Math.min(W, H) * 0.5
+  // 默认尺寸为容器较边的 0.35 倍
+  const scale = Math.min(W, H) * 0.35
   for (let i = 0; i < 16; i++) {
     projected3D[i][0] *= scale
     projected3D[i][1] *= scale

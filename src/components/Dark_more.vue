@@ -145,12 +145,12 @@ const CONFIG = {
   STAR_SIZE: 3, // 速度线基准宽度（参考值）
   STAR_MIN_SCALE: 0.2, // 粒子 z 缩放下限（视差系数，参考值）
   OVERFLOW_THRESHOLD: 50, // 出界回收阈值（px，参考值）
-  POINTER_GAIN: 4.5, // 鼠标位移 → 目标速度增益（等效参考"位移/8"的 0.6 倍）
+  POINTER_GAIN: 3.5, // 鼠标位移 → 目标速度增益（粒子速度 ≈ 鼠标速度 1.45 倍×z）
   VEL_DECAY: 0.96, // 目标速度逐帧衰减（惯性余速，参考值）
   VEL_EASE: 0.05, // 实际速度趋近目标速度的系数（参考值）
-  TAIL_LENGTH: 0.033, // 速度线长度 = 速度 × 该值（等效参考"×2"帧制）
-  DRIFT_MIN: 8, // 粒子固有漂移速度下限（px/s）
-  DRIFT_MAX: 20, // 粒子固有漂移速度上限（px/s）
+  TAIL_LENGTH: 0.066, // 速度线长度 = 速度 × 该值（拖尾加长）
+  DRIFT_MIN: 12, // 粒子固有漂移速度下限（px/s）
+  DRIFT_MAX: 26, // 粒子固有漂移速度上限（px/s）
 }
 
 // 2D 粒子：z 为 0.2~1 视差系数，速度 = 全局惯性速度 × z + 固有漂移
@@ -159,15 +159,21 @@ class Star {
     this.x = Math.random() * starW
     this.y = Math.random() * starH
     this.z = CONFIG.STAR_MIN_SCALE + Math.random() * (1 - CONFIG.STAR_MIN_SCALE)
+    this.sizeK = 0.3 + Math.random() * 2.2 // 独立大小系数（0.3~2.5），叠加 z 视差
     // 每个粒子带一点固有漂移速度：鼠标不动时星空也有微动
     const a = Math.random() * Math.PI * 2
     const s = CONFIG.DRIFT_MIN + Math.random() * (CONFIG.DRIFT_MAX - CONFIG.DRIFT_MIN)
     this.dx = Math.cos(a) * s
     this.dy = Math.sin(a) * s
     const roll = Math.random()
-    this.color = roll < 0.12 ? '#ff9ed0'
-      : roll < 0.2 ? '#d9b8ff'
-      : '#ffe4f0'
+    this.color = roll < 0.12 ? '#ff9ed0' // 亮粉
+      : roll < 0.2 ? '#d9b8ff' // 淡紫
+      : roll < 0.3 ? '#fff3c4' // 淡黄（呼应月亮光晕）
+      : roll < 0.38 ? '#ffc4a8' // 淡橙
+      : roll < 0.5 ? '#a8d8ff' // 淡蓝（呼应夜空）
+      : roll < 0.58 ? '#b5e8e0' // 淡青
+      : roll < 0.7 ? '#ffffff' // 纯白
+      : '#ffe4f0' // 粉白（主色）
   }
 
   // 位移 = (全局速度 × 视差系数 + 固有漂移) × dt；出界按速度方向回收
@@ -201,20 +207,33 @@ class Star {
     this.z = CONFIG.STAR_MIN_SCALE + Math.random() * (1 - CONFIG.STAR_MIN_SCALE)
   }
 
-  // 速度线（流星尾）：所有粒子统一沿全局速度方向，长度 = 速度 × TAIL_LENGTH
+  // 速度线（流星彗尾）：沿全局速度方向 4 段延伸，越远越细越淡；亮度随速度 + 温和闪烁
   render(ctx) {
-    let tailX = velocity.x * CONFIG.TAIL_LENGTH
-    let tailY = velocity.y * CONFIG.TAIL_LENGTH
+    const spd = Math.hypot(velocity.x, velocity.y)
+    const speedFactor = Math.min(1, spd / 300)
+    const alpha = Math.min(1, 0.55 + speedFactor * 0.3 + (Math.random() - 0.5) * 0.3)
+
+    // 拖尾在运动方向的反方向（粒子身后）
+    let tailX = -velocity.x * CONFIG.TAIL_LENGTH
+    let tailY = -velocity.y * CONFIG.TAIL_LENGTH
     if (Math.abs(tailX) < 0.1) tailX = 0.5
     if (Math.abs(tailY) < 0.1) tailY = 0.5
-    ctx.beginPath()
+
+    const lw = CONFIG.STAR_SIZE * this.z * this.sizeK * (0.7 + speedFactor * 0.3)
+    const SEGMENTS = 4
     ctx.lineCap = 'round'
-    ctx.lineWidth = CONFIG.STAR_SIZE * this.z
-    ctx.globalAlpha = 0.5 + 0.5 * Math.random()
     ctx.strokeStyle = this.color
-    ctx.moveTo(this.x, this.y)
-    ctx.lineTo(this.x + tailX, this.y + tailY)
-    ctx.stroke()
+    for (let i = SEGMENTS; i >= 1; i--) {
+      const a = (i - 1) / SEGMENTS
+      const b = i / SEGMENTS
+      const segDist = (a + b) / 2 // 距粒子越近越小（亮粗），越远越大（淡细）
+      ctx.globalAlpha = alpha * (1 - segDist * 0.85)
+      ctx.lineWidth = lw * (1 - segDist * 0.7)
+      ctx.beginPath()
+      ctx.moveTo(this.x + tailX * a, this.y + tailY * a)
+      ctx.lineTo(this.x + tailX * b, this.y + tailY * b)
+      ctx.stroke()
+    }
   }
 }
 
