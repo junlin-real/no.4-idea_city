@@ -1,7 +1,9 @@
 <template>
-  <div class="dark-stars" v-if="isDark">
-    <!-- 月亮 -->
-    <div class="moon" :class="{ shaking: isShaking }" @click="handleClick">
+  <!-- 星空画布：置于页面内容最底层 -->
+  <canvas v-if="isDark" ref="starCanvasRef" class="stars-canvas" />
+
+  <!-- 月亮：置于内容上层，保持可点击 -->
+  <div v-if="isDark" class="moon" :class="{ shaking: isShaking }" @click="handleClick">
       <svg class="moon-svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <radialGradient id="moonGrad" cx="63%" cy="45%" r="67%">
@@ -59,32 +61,12 @@
       <!-- 闪光层 -->
       <div v-if="isBreaking" class="flash" />
     </div>
-
-    <!-- 星星 -->
-    <span
-      v-for="star in stars"
-      :key="star.id"
-      class="star"
-      :style="{
-        left: star.x + '%',
-        top: star.y + '%',
-        width: star.size + 'px',
-        height: star.size + 'px',
-        animationDelay: star.delay + 's',
-        animationDuration: star.duration + 's',
-      }"
-    />
-  </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 
 const emit = defineEmits(['switchToLight'])
-
-const props = defineProps({
-  count: { type: Number, default: 80 },
-})
 
 const isDark = ref(false)
 const clickCount = ref(0)
@@ -137,6 +119,225 @@ function handleClick() {
   }
 }
 
+// --- 星空特效（2D 粒子 + 鼠标流场） ---
+const starCanvasRef = ref(null)
+let starCtx = null
+let starW = 0
+let starH = 0
+let stars = []
+let starRaf = 0
+let lastT = 0
+
+// 全局惯性速度：tx/ty 目标（鼠标位移累加、逐帧衰减），x/y 实际速度（平滑趋近目标）
+let velocity = { x: 0, y: 0, tx: 0, ty: 0 }
+let lastMX = 0
+let lastMY = 0
+let lastMT = 0
+
+// 星空渐变背景（夜空蓝底 + 月亮光晕）
+let skyGradient = null
+let haloGradient = null
+
+const CONFIG = {
+  MOON_CENTER_X_RIGHT: 95, // 月亮中心距右边缘 px（月亮 90px 宽，right: 50px）
+  MOON_CENTER_Y_TOP: 115, // 月亮中心距上边缘 px（top: 70px + 45px）
+  PARTICLE_DIV: 5, // 粒子数 = (宽 + 高) / 该值（密度更大）
+  STAR_SIZE: 3, // 速度线基准宽度（参考值）
+  STAR_MIN_SCALE: 0.2, // 粒子 z 缩放下限（视差系数，参考值）
+  OVERFLOW_THRESHOLD: 50, // 出界回收阈值（px，参考值）
+  POINTER_GAIN: 4.5, // 鼠标位移 → 目标速度增益（等效参考"位移/8"的 0.6 倍）
+  VEL_DECAY: 0.96, // 目标速度逐帧衰减（惯性余速，参考值）
+  VEL_EASE: 0.05, // 实际速度趋近目标速度的系数（参考值）
+  TAIL_LENGTH: 0.033, // 速度线长度 = 速度 × 该值（等效参考"×2"帧制）
+  DRIFT_MIN: 8, // 粒子固有漂移速度下限（px/s）
+  DRIFT_MAX: 20, // 粒子固有漂移速度上限（px/s）
+}
+
+// 2D 粒子：z 为 0.2~1 视差系数，速度 = 全局惯性速度 × z + 固有漂移
+class Star {
+  constructor() {
+    this.x = Math.random() * starW
+    this.y = Math.random() * starH
+    this.z = CONFIG.STAR_MIN_SCALE + Math.random() * (1 - CONFIG.STAR_MIN_SCALE)
+    // 每个粒子带一点固有漂移速度：鼠标不动时星空也有微动
+    const a = Math.random() * Math.PI * 2
+    const s = CONFIG.DRIFT_MIN + Math.random() * (CONFIG.DRIFT_MAX - CONFIG.DRIFT_MIN)
+    this.dx = Math.cos(a) * s
+    this.dy = Math.sin(a) * s
+    const roll = Math.random()
+    this.color = roll < 0.12 ? '#ff9ed0'
+      : roll < 0.2 ? '#d9b8ff'
+      : '#ffe4f0'
+  }
+
+  // 位移 = (全局速度 × 视差系数 + 固有漂移) × dt；出界按速度方向回收
+  update(dt) {
+    this.x += (velocity.x * this.z + this.dx) * dt
+    this.y += (velocity.y * this.z + this.dy) * dt
+    const th = CONFIG.OVERFLOW_THRESHOLD
+    if (this.x < -th || this.x > starW + th || this.y < -th || this.y > starH + th) {
+      this.recycle()
+    }
+  }
+
+  // 按速度主导方向从对应边缘重生，形成循环流动
+  recycle() {
+    const vx = Math.abs(velocity.x)
+    const vy = Math.abs(velocity.y)
+    const th = CONFIG.OVERFLOW_THRESHOLD
+    if (vx > 1 || vy > 1) {
+      if (vx > vy) {
+        // 水平主导：从左右边缘重生（速度反方向）
+        this.x = velocity.x > 0 ? -th : starW + th
+        this.y = Math.random() * starH
+      } else {
+        this.y = velocity.y > 0 ? -th : starH + th
+        this.x = Math.random() * starW
+      }
+    } else {
+      this.x = Math.random() * starW
+      this.y = Math.random() * starH
+    }
+    this.z = CONFIG.STAR_MIN_SCALE + Math.random() * (1 - CONFIG.STAR_MIN_SCALE)
+  }
+
+  // 速度线（流星尾）：所有粒子统一沿全局速度方向，长度 = 速度 × TAIL_LENGTH
+  render(ctx) {
+    let tailX = velocity.x * CONFIG.TAIL_LENGTH
+    let tailY = velocity.y * CONFIG.TAIL_LENGTH
+    if (Math.abs(tailX) < 0.1) tailX = 0.5
+    if (Math.abs(tailY) < 0.1) tailY = 0.5
+    ctx.beginPath()
+    ctx.lineCap = 'round'
+    ctx.lineWidth = CONFIG.STAR_SIZE * this.z
+    ctx.globalAlpha = 0.5 + 0.5 * Math.random()
+    ctx.strokeStyle = this.color
+    ctx.moveTo(this.x, this.y)
+    ctx.lineTo(this.x + tailX, this.y + tailY)
+    ctx.stroke()
+  }
+}
+
+function initStars() {
+  const count = Math.floor((starW + starH) / CONFIG.PARTICLE_DIV)
+  stars = Array.from({ length: count }, () => new Star())
+}
+
+// 构建背景：淡红（月亮）→ 夜空蓝全屏平滑过渡
+function buildGradients() {
+  if (!starCtx) return
+  skyGradient = starCtx.createLinearGradient(0, 0, 0, starH)
+  skyGradient.addColorStop(0, '#182a45')
+  skyGradient.addColorStop(1, '#111d33')
+  const mx = starW - CONFIG.MOON_CENTER_X_RIGHT
+  const my = CONFIG.MOON_CENTER_Y_TOP
+  // 全屏径向：月亮附近淡黄→淡红，向外平滑过渡到夜空蓝
+  const r = Math.hypot(mx, my) * 1.1
+  haloGradient = starCtx.createRadialGradient(mx, my, 0, mx, my, r)
+  haloGradient.addColorStop(0, 'rgba(255, 236, 170, 0.45)') // 淡黄（月亮核心）
+  haloGradient.addColorStop(0.12, 'rgba(255, 165, 125, 0.32)') // 淡红
+  haloGradient.addColorStop(0.45, 'rgba(120, 90, 140, 0.18)') // 红紫过渡
+  haloGradient.addColorStop(0.8, 'rgba(40, 60, 100, 0.08)') // 偏蓝
+  haloGradient.addColorStop(1, 'rgba(28, 46, 80, 0)') // 融入夜空蓝
+}
+
+// 首帧铺满背景打底
+function paintBase() {
+  if (!starCtx) return
+  starCtx.globalAlpha = 1
+  starCtx.fillStyle = skyGradient
+  starCtx.fillRect(0, 0, starW, starH)
+  starCtx.fillStyle = haloGradient
+  starCtx.fillRect(0, 0, starW, starH)
+  starCtx.globalAlpha = 1
+}
+
+function resizeStars() {
+  const canvas = starCanvasRef.value
+  if (!canvas) return
+  const dpr = window.devicePixelRatio || 1
+  starW = window.innerWidth
+  starH = window.innerHeight
+  canvas.width = starW * dpr
+  canvas.height = starH * dpr
+  canvas.style.width = starW + 'px'
+  canvas.style.height = starH + 'px'
+  starCtx = canvas.getContext('2d')
+  starCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  buildGradients()
+  paintBase()
+  initStars()
+}
+
+function renderStars(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000)
+  lastT = now
+  const ctx = starCtx
+  if (!ctx) { starRaf = requestAnimationFrame(renderStars); return }
+
+  // 惯性速度：目标逐帧衰减（余速滑行），实际速度平滑趋近目标
+  const f = Math.min(4, dt * 60) // 归一化到 60fps
+  velocity.tx *= Math.pow(CONFIG.VEL_DECAY, f)
+  velocity.ty *= Math.pow(CONFIG.VEL_DECAY, f)
+  const ease = Math.min(1, CONFIG.VEL_EASE * f)
+  velocity.x += (velocity.tx - velocity.x) * ease
+  velocity.y += (velocity.ty - velocity.y) * ease
+
+  // 每帧清屏重绘背景与粒子：粒子运动不留下蒙版轨迹
+  ctx.clearRect(0, 0, starW, starH)
+  ctx.globalAlpha = 1
+  ctx.fillStyle = skyGradient
+  ctx.fillRect(0, 0, starW, starH)
+  ctx.fillStyle = haloGradient
+  ctx.fillRect(0, 0, starW, starH)
+
+  for (const s of stars) {
+    s.update(dt)
+    s.render(ctx)
+  }
+  ctx.globalAlpha = 1
+  starRaf = requestAnimationFrame(renderStars)
+}
+
+function startStarLoop() {
+  stopStarLoop()
+  lastT = performance.now()
+  starRaf = requestAnimationFrame(renderStars)
+}
+
+function stopStarLoop() {
+  cancelAnimationFrame(starRaf)
+  starRaf = 0
+}
+
+// 鼠标移动：位移累加进目标速度（位移 / 灵敏度），带惯性
+function onWinMove(e) {
+  if (!isDark.value) return
+  const now = performance.now()
+  if (!lastMT) {
+    lastMT = now
+    lastMX = e.clientX
+    lastMY = e.clientY
+    return
+  }
+  const ox = e.clientX - lastMX
+  const oy = e.clientY - lastMY
+  velocity.tx += ox * CONFIG.POINTER_GAIN
+  velocity.ty += oy * CONFIG.POINTER_GAIN
+  lastMX = e.clientX
+  lastMY = e.clientY
+  lastMT = now
+}
+
+watch(isDark, (dark) => {
+  if (dark) {
+    resizeStars()
+    startStarLoop()
+  } else {
+    stopStarLoop()
+  }
+}, { flush: 'post' })
+
 onMounted(() => {
   checkDark()
   const observer = new MutationObserver(checkDark)
@@ -144,43 +345,28 @@ onMounted(() => {
     attributes: true,
     attributeFilter: ['class'],
   })
-  onUnmounted(() => observer.disconnect())
-})
-
-function rand(min, max) {
-  return Math.random() * (max - min) + min
-}
-
-const stars = computed(() => {
-  return Array.from({ length: props.count }, (_, i) => ({
-    id: i,
-    x: rand(0, 100),
-    y: rand(0, 100),
-    size: rand(1.5, 3.5),
-    delay: rand(0, 6),
-    duration: rand(2, 5),
-  }))
+  window.addEventListener('resize', resizeStars)
+  window.addEventListener('mousemove', onWinMove)
+  onUnmounted(() => {
+    observer.disconnect()
+    stopStarLoop()
+    window.removeEventListener('resize', resizeStars)
+    window.removeEventListener('mousemove', onWinMove)
+  })
 })
 </script>
 
 <style scoped>
-.dark-stars {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
 /* ===== 月亮 ===== */
 .moon {
-  position: absolute;
+  position: fixed;
   top: 70px;
   right: 50px;
   width: 90px;
   height: 90px;
   cursor: pointer;
   pointer-events: auto;
+  z-index: 998;
   animation: moon-float 6s ease-in-out infinite;
   filter: drop-shadow(0 0 8px rgba(253, 216, 53, 0.6))
           drop-shadow(0 0 20px rgba(253, 216, 53, 0.25));
@@ -274,24 +460,12 @@ const stars = computed(() => {
   }
 }
 
-/* ===== 星星 ===== */
-.star {
-  position: absolute;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.6);
-  animation: twinkle ease-in-out infinite alternate;
-  opacity: 0;
-}
-
-@keyframes twinkle {
-  0% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
+/* ===== 星星（canvas） ===== */
+.stars-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  display: block;
+  pointer-events: none;
 }
 </style>

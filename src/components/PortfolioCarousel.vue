@@ -9,8 +9,13 @@ const items = portfolioItems
 const rotation = ref(0)
 const modalItem = ref(null)
 const flipped = ref(false)
+const sceneRef = ref(null)
+const containerW = ref(0)
 
-let autoTimer = null
+let autoRaf = null
+let holding = false
+let holdUntil = 0
+let lastAutoTime = 0
 let momentumFrame = null
 let isDragging = false
 let dragStartX = 0
@@ -20,7 +25,10 @@ let lastDragX = 0
 let lastDragTime = 0
 let velocity = 0
 
-const anglePerCard = 360 / 4 // 固定4个位置，展示3张
+// 按项目数量均匀分布角度，所有卡片同时可见
+const anglePerCard = 360 / items.length
+const CARD_HALF = 110 // 卡片半宽（Project_Card 220px）
+const SIDE_GAP = 24 // 卡片与视口边缘的留白
 
 function getCardStyle(index) {
   // 每张卡片相对于当前旋转角度的偏移
@@ -30,34 +38,70 @@ function getCardStyle(index) {
 
   // normalized=0 表示正前方
   const absNorm = Math.abs(normalized)
-  const visible = absNorm < 120
+
+  // 3 张主卡（正前 + 两侧）始终显示；更多卡片仅在视口放得下时淡显
+  const isMain = absNorm <= 90
+  const fitNorm = (containerW.value / 2 - CARD_HALF - SIDE_GAP) / 1.8
+  const visible = (isMain || absNorm <= fitNorm) && absNorm < 160
 
   const translateX = normalized * 1.8
   const rotate = normalized * 0.15
-  const scale = absNorm < 10 ? 1.05 : absNorm < 60 ? 0.9 : 0.75
-  const opacity = absNorm > 100 ? 0 : absNorm > 60 ? 0.3 : absNorm > 30 ? 0.7 : 1
+  const scale = absNorm < 15 ? 1.05 : absNorm < 55 ? 0.9 : absNorm < 100 ? 0.78 : 0.62
+  const opacity = absNorm < 35 ? 1 : absNorm < 80 ? 0.75 : absNorm < 130 ? 0.45 : 0.22
   const zIndex = Math.round((180 - absNorm) * 10)
 
   return {
     transform: `translateX(${translateX}px) rotate(${rotate}deg) scale(${scale})`,
-    opacity,
+    opacity: visible ? opacity : 0,
     zIndex,
     pointerEvents: visible ? 'auto' : 'none',
   }
 }
 
+const GLIDE_SPEED = 45 // 基础角速度 °/s
+const HOLD_MS = 2000 // 每张卡片居中的停留时长
+
 function startAuto() {
   stopAuto()
-  autoTimer = setInterval(() => {
-    rotation.value -= anglePerCard
-  }, 3000)
+  lastAutoTime = performance.now()
+  autoRaf = requestAnimationFrame(autoTick)
 }
 
 function stopAuto() {
-  if (autoTimer) {
-    clearInterval(autoTimer)
-    autoTimer = null
+  if (autoRaf) { cancelAnimationFrame(autoRaf); autoRaf = null }
+  holding = false
+}
+
+function autoTick(now) {
+  const dt = (now - lastAutoTime) / 1000
+  lastAutoTime = now
+
+  if (holding && now >= holdUntil) holding = false
+
+  if (!holding) {
+    const snap = nextSnap(rotation.value, anglePerCard, -1)
+    const dist = snap - rotation.value
+    const remaining = Math.abs(dist)
+
+    if (remaining < 0.05) {
+      // 已精确停在居中位置，停留 HOLD_MS 后继续滚动
+      rotation.value = snap
+      holding = true
+      holdUntil = now + HOLD_MS
+    } else {
+      // 匀速滑动，接近目标时减速缓入
+      const speed = Math.min(GLIDE_SPEED, remaining * 6)
+      rotation.value += Math.sign(dist) * Math.min(speed * dt, remaining)
+    }
   }
+
+  autoRaf = requestAnimationFrame(autoTick)
+}
+
+// 沿旋转方向的下一个卡片居中位置
+function nextSnap(current, step, dir) {
+  const snapped = dir < 0 ? Math.floor(current / step) * step : Math.ceil(current / step) * step
+  return Math.abs(snapped - current) < 1e-6 ? snapped + dir * step : snapped
 }
 
 function startMomentum() {
@@ -165,8 +209,14 @@ watch(() => items.length, () => {
   startAuto()
 })
 
+function measureScene() {
+  if (sceneRef.value) containerW.value = sceneRef.value.getBoundingClientRect().width
+}
+
 onMounted(() => {
+  measureScene()
   startAuto()
+  window.addEventListener('resize', measureScene)
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerUp)
 })
@@ -174,6 +224,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopAuto()
   stopMomentum()
+  window.removeEventListener('resize', measureScene)
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
 })
@@ -181,7 +232,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="carousel-wrapper">
-    <div class="carousel-scene" @pointerdown="onPointerDown">
+    <div ref="sceneRef" class="carousel-scene" @pointerdown="onPointerDown">
       <div
         v-for="(item, index) in items"
         :key="item.title"

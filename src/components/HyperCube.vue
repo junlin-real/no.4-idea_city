@@ -1,8 +1,10 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import gsap from 'gsap'
 
 const canvasRef = ref(null)
 const containerRef = ref(null)
+const dims = ref({ w: 0, h: 0 })
 
 // --- Reactive state ---
 const innerHue = ref(0)
@@ -11,6 +13,116 @@ const outerSpeed = ref(1)
 const innerSpeed = ref(1)
 const perspective = ref(1.5)
 const spacing = ref(1)
+
+// --- 拖拽控制按钮 ---
+const iconPalette = `
+  <path d="M12 22a10 10 0 1 1 10-10c0 1.4-1.1 2.5-2.5 2.5h-2.6a2.9 2.9 0 0 0-2.9 2.9c0 .9.4 1.6.4 2.2 0 1.4-1.1 2.4-2.4 2.4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+  <circle cx="7.4" cy="11.2" r="1.3" fill="currentColor"/>
+  <circle cx="11" cy="7.6" r="1.3" fill="currentColor"/>
+  <circle cx="15.6" cy="8.8" r="1.3" fill="currentColor"/>
+  <circle cx="16.6" cy="13.4" r="1.3" fill="currentColor"/>`
+const iconWheel = `
+  <defs><linearGradient id="hc-wheel" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#ff4d4d"/><stop offset=".2" stop-color="#ffd43b"/>
+    <stop offset=".4" stop-color="#51cf66"/><stop offset=".6" stop-color="#339af0"/>
+    <stop offset=".8" stop-color="#b197fc"/><stop offset="1" stop-color="#ff4d4d"/>
+  </linearGradient></defs>
+  <circle cx="12" cy="12" r="8.6" fill="none" stroke="url(#hc-wheel)" stroke-width="3"/>
+  <circle cx="12" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".5"/>`
+const iconTurbine = `
+  <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/>
+  <path d="M12 8.6C13.4 4.4 16.2 2.7 19.9 3.1 19.7 7 17.9 9.9 13.6 11.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M15.4 12C19.6 13.4 21.3 16.2 20.9 19.9 17 19.7 14.1 17.9 12.8 13.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M12 15.4C10.6 19.6 7.8 21.3 4.1 20.9 4.3 17 6.1 14.1 10.4 12.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M8.6 12C4.4 10.6 2.7 7.8 3.1 4.1 7 4.3 9.9 6.1 11.2 10.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>`
+const iconRotate = `
+  <path d="M20 11.5a8 8 0 1 0-2.2 5.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M20 5v6.5h-6.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`
+const iconPersp = `
+  <path d="M12 3.5 20.5 12 12 20.5 3.5 12Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M3.5 12h17M12 3.5v17" stroke="currentColor" stroke-width="1.2" opacity=".6"/>
+  <path d="M6.6 6.6l10.8 10.8M17.4 6.6 6.6 17.4" stroke="currentColor" stroke-width="1.2" opacity=".6"/>`
+const iconExpand = `
+  <path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`
+
+const controls = [
+  { key: 'innerHue', label: '内色', param: innerHue, def: 0, angle: -90, min: 0, max: 360, sens: 2, persist: true, icon: iconPalette },
+  { key: 'outerSpeed', label: '外速', param: outerSpeed, def: 1, angle: -30, min: 0, max: 5, sens: 0.04, persist: false, icon: iconTurbine },
+  { key: 'spacing', label: '间距', param: spacing, def: 1, angle: 30, min: 0.3, max: 2.5, sens: 0.02, persist: false, icon: iconExpand },
+  { key: 'outerHue', label: '外色', param: outerHue, def: 180, angle: 90, min: 0, max: 360, sens: 2, persist: true, icon: iconWheel },
+  { key: 'innerSpeed', label: '内速', param: innerSpeed, def: 1, angle: 150, min: 0, max: 5, sens: 0.04, persist: false, icon: iconRotate },
+  { key: 'perspective', label: '透视', param: perspective, def: 1.5, angle: 210, min: 1.05, max: 5, sens: 0.03, persist: false, icon: iconPersp },
+]
+
+const fixedColors = {
+  outerSpeed: '#f59f0b',
+  innerSpeed: '#38bdf8',
+  perspective: '#a78bfa',
+  spacing: '#34d399',
+}
+
+function btnStyle(ctl) {
+  const rad = (ctl.angle * Math.PI) / 180
+  const color = ctl.key === 'innerHue' ? `hsl(${innerHue.value}, 70%, 55%)`
+    : ctl.key === 'outerHue' ? `hsl(${outerHue.value}, 70%, 55%)`
+    : fixedColors[ctl.key]
+  const r = Math.min(dims.value.w, dims.value.h) * 0.4
+  return {
+    left: `calc(50% + ${Math.cos(rad) * r}px)`,
+    top: `calc(50% + ${Math.sin(rad) * r}px)`,
+    color,
+  }
+}
+
+let dragState = null
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v))
+}
+
+function applyBtnPos(btn, dx, dy) {
+  btn.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`
+}
+
+function onBtnDown(e, ctl) {
+  if (dragState) return
+  e.preventDefault()
+  e.stopPropagation()
+  const btn = e.currentTarget
+  btn.setPointerCapture(e.pointerId)
+  if (btn._tween) { btn._tween.kill(); btn._tween = null }
+  const rad = (ctl.angle * Math.PI) / 180
+  dragState = {
+    ctl, btn,
+    startX: e.clientX, startY: e.clientY,
+    cos: Math.cos(rad), sin: Math.sin(rad),
+    base: ctl.persist ? ctl.param.value : ctl.def,
+    dx: 0, dy: 0,
+  }
+}
+
+function onBtnMove(e, ctl) {
+  if (!dragState || dragState.ctl !== ctl) return
+  dragState.dx = e.clientX - dragState.startX
+  dragState.dy = e.clientY - dragState.startY
+  applyBtnPos(dragState.btn, dragState.dx, dragState.dy)
+  const disp = dragState.dx * dragState.cos + dragState.dy * dragState.sin
+  ctl.param.value = clamp(dragState.base + disp * ctl.sens, ctl.min, ctl.max)
+}
+
+function onBtnUp(e, ctl) {
+  if (!dragState || dragState.ctl !== ctl) return
+  const { btn, dx, dy } = dragState
+  dragState = null
+  if (btn.hasPointerCapture && btn.hasPointerCapture(e.pointerId)) btn.releasePointerCapture(e.pointerId)
+  if (!ctl.persist) ctl.param.value = ctl.def
+  const pos = { dx, dy }
+  btn._tween = gsap.to(pos, {
+    dx: 0, dy: 0, duration: 0.8, ease: 'elastic.out(1, 0.5)',
+    onUpdate: () => applyBtnPos(btn, pos.dx, pos.dy),
+    onComplete: () => { btn._tween = null },
+  })
+}
 
 // --- 4D math helpers ---
 class Vec4 {
@@ -85,6 +197,7 @@ function resize() {
   const dpr = window.devicePixelRatio || 1
   W = rect.width
   H = rect.height
+  dims.value = { w: W, h: H }
   canvasRef.value.width = W * dpr
   canvasRef.value.height = H * dpr
   canvasRef.value.style.width = W + 'px'
@@ -150,7 +263,7 @@ function render() {
     projected3D.push([v.x * wScale, v.y * wScale, v.z * wScale])
   }
 
-  const scale = 140
+  const scale = Math.min(W, H) * 0.5
   for (let i = 0; i < 16; i++) {
     projected3D[i][0] *= scale
     projected3D[i][1] *= scale
@@ -272,53 +385,43 @@ onUnmounted(() => {
 
 <template>
   <div class="hypercube-root">
-    <div class="canvas-wrap" ref="containerRef">
-      <canvas ref="canvasRef"></canvas>
-    </div>
-    <div class="control-panel">
-      <div class="ctrl ctrl-row">
-        <label>颜色</label>
-        <span class="sub-label">内</span>
-        <input type="range" v-model.number="innerHue" min="0" max="360" step="1" />
-        <span class="val">{{ innerHue }}</span>
-        <span class="sub-label">外</span>
-        <input type="range" v-model.number="outerHue" min="0" max="360" step="1" />
-        <span class="val">{{ outerHue }}</span>
+    <div class="hypercube-stage">
+      <div class="canvas-wrap" ref="containerRef">
+        <canvas ref="canvasRef"></canvas>
       </div>
-      <div class="ctrl ctrl-row">
-        <label>转速</label>
-        <span class="sub-label">外</span>
-        <input type="range" v-model.number="outerSpeed" min="0" max="5" step="0.1" />
-        <span class="val">{{ outerSpeed.toFixed(1) }}</span>
-        <span class="sub-label">内</span>
-        <input type="range" v-model.number="innerSpeed" min="0" max="5" step="0.1" />
-        <span class="val">{{ innerSpeed.toFixed(1) }}</span>
-      </div>
-      <div class="ctrl ctrl-row">
-        <label>透视</label>
-        <input type="range" v-model.number="perspective" min="1.05" max="5" step="0.05" />
-        <span class="val">{{ perspective.toFixed(1) }}</span>
-        <label>间距</label>
-        <input type="range" v-model.number="spacing" min="0.3" max="2.5" step="0.1" />
-        <span class="val">{{ spacing.toFixed(1) }}</span>
-      </div>
+      <button
+        v-for="ctl in controls"
+        :key="ctl.key"
+        class="cube-btn"
+        :aria-label="ctl.label"
+        :style="btnStyle(ctl)"
+        @pointerdown="onBtnDown($event, ctl)"
+        @pointermove="onBtnMove($event, ctl)"
+        @pointerup="onBtnUp($event, ctl)"
+        @pointercancel="onBtnUp($event, ctl)"
+      >
+        <svg class="ctl-icon" viewBox="0 0 24 24" v-html="ctl.icon" />
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
 .hypercube-root {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
+  position: relative;
   width: 100%;
-  max-width: 280px;
+  height: 100%;
+}
+
+.hypercube-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 .canvas-wrap {
-  width: 100%;
-  aspect-ratio: 1;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
   cursor: grab;
 }
@@ -333,69 +436,43 @@ onUnmounted(() => {
   height: 100%;
 }
 
-.control-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-}
-
-.ctrl {
+/* ===== 拖拽控制按钮 ===== */
+.cube-btn {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.4s ease;
 }
 
-.ctrl-row {
-  gap: 4px;
+.cube-btn:hover {
+  border-color: currentColor;
+  box-shadow: var(--shadow);
 }
 
-.ctrl label {
-  width: 32px;
-  font-size: 12px;
-  color: var(--text);
-  flex-shrink: 0;
-  transition: color 0.4s ease;
+.cube-btn:active {
+  cursor: grabbing;
 }
 
-.ctrl .sub-label {
-  width: 14px;
-  font-size: 11px;
-  color: var(--text);
-  flex-shrink: 0;
-  text-align: center;
-  transition: color 0.4s ease;
+.ctl-icon {
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  transition: transform 0.2s;
 }
 
-.ctrl input[type="range"] {
-  flex: 1;
-  min-width: 0;
-  height: 3px;
-  appearance: none;
-  background: var(--border);
-  border-radius: 2px;
-  outline: none;
-  cursor: pointer;
-  transition: background 0.4s ease;
-}
-
-.ctrl input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  cursor: pointer;
-  border: none;
-}
-
-.ctrl .val {
-  width: 22px;
-  text-align: right;
-  font-size: 11px;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-  transition: color 0.4s ease;
+.cube-btn:hover .ctl-icon {
+  transform: scale(1.12);
 }
 </style>

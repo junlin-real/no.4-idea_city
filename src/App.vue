@@ -55,28 +55,10 @@ function onSwitchToLight() {
 }
 
 const navLinks = [
-  { label: '文章', href: '#posts' },
   { label: '作品', href: '#portfolio' },
   { label: '关于', href: '#about' },
 ]
 
-const recentPosts = ref([
-  {
-    title: '第一篇文章标题',
-    summary: '这里是一段简短的文章摘要，描述文章的核心内容和要点，吸引读者点击阅读完整内容。',
-    date: '2026-07-25',
-  },
-  {
-    title: '第二篇文章标题',
-    summary: '这里是一段简短的文章摘要，描述文章的核心内容和要点，吸引读者点击阅读完整内容。',
-    date: '2026-07-20',
-  },
-  {
-    title: '第三篇文章标题',
-    summary: '这里是一段简短的文章摘要，描述文章的核心内容和要点，吸引读者点击阅读完整内容。',
-    date: '2026-07-15',
-  },
-])
 </script>
 
 <template>
@@ -119,9 +101,6 @@ const recentPosts = ref([
     <!-- Hero 横幅 -->
     <section class="hero">
       <div class="hero-layout">
-        <div class="hero-left">
-          <HyperCube />
-        </div>
         <div class="hero-right">
           <p class="hero-tag">欢迎您</p>
           <h1 class="hero-title">你好，我是<br /><span class="accent">JunLin</span></h1>
@@ -129,25 +108,16 @@ const recentPosts = ref([
             这里是我的个人网站，我希望用这个网站来分享我的想法和创作，同时这个网站也是我的求职网站，虽然还在完善中，但我希望它能成为我职业发展的见证。
           </p>
           <div class="hero-actions">
-            <a href="#posts" class="btn btn-primary">浏览文章</a>
-            <a href="#portfolio" class="btn btn-secondary">查看作品</a>
+            <a href="#portfolio" class="btn btn-primary">查看作品</a>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 最近文章 -->
-    <section id="posts" class="section">
-      <div class="section-inner">
-        <h2 class="section-title">最近文章</h2>
-        <div class="posts-grid">
-          <article v-for="post in recentPosts" :key="post.title" class="post-card">
-            <time class="post-date">{{ post.date }}</time>
-            <h3 class="post-title">{{ post.title }}</h3>
-            <p class="post-summary">{{ post.summary }}</p>
-            <a href="#" class="post-link">阅读全文 →</a>
-          </article>
-        </div>
+    <!-- 超立方体展示 -->
+    <section class="section hypercube-section">
+      <div class="section-inner hypercube-inner">
+        <HyperCube />
       </div>
     </section>
 
@@ -266,10 +236,6 @@ const recentPosts = ref([
   gap: 48px;
 }
 
-.hero-left {
-  flex: 0 0 300px;
-}
-
 .hero-right {
   flex: 1;
   min-width: 0;
@@ -364,58 +330,17 @@ const recentPosts = ref([
   color: var(--text-h);
 }
 
-/* ===== 文章卡片 ===== */
-.posts-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
+/* ===== 超立方体展示 ===== */
+.hypercube-section {
+  padding: 0 24px 80px;
 }
 
-.post-card {
-  padding: 28px;
-  border-radius: 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  transition: box-shadow 0.2s, transform 0.2s, background-color 0.4s ease, border-color 0.4s ease;
-  display: flex;
-  flex-direction: column;
-}
-
-.post-card:hover {
-  box-shadow: var(--shadow);
-  transform: translateY(-2px);
-}
-
-.post-date {
-  font-size: 13px;
-  color: var(--text);
-  margin-bottom: 12px;
-}
-
-.post-title {
-  font-size: 20px;
-  margin: 0 0 10px;
-  color: var(--text-h);
-  line-height: 1.3;
-}
-
-.post-summary {
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--text);
-  margin: 0 0 16px;
-  flex: 1;
-}
-
-.post-link {
-  font-size: 14px;
-  color: var(--accent);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.post-link:hover {
-  text-decoration: underline;
+.hypercube-inner {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 1;
+  margin: 0 auto;
 }
 
 /* ===== 页脚 ===== */
@@ -467,12 +392,6 @@ const recentPosts = ref([
     gap: 24px;
   }
 
-  .hero-left {
-    flex: 0 0 auto;
-    width: 100%;
-    max-width: 320px;
-  }
-
   .hero-right {
     text-align: center;
   }
@@ -485,12 +404,12 @@ const recentPosts = ref([
     font-size: 16px;
   }
 
-  .posts-grid {
-    grid-template-columns: 1fr;
-  }
-
   .section {
     padding: 50px 20px;
+  }
+
+  .hypercube-section {
+    padding: 0 20px 50px;
   }
 
   .section-title {
