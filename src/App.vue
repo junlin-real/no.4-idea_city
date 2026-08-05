@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import Light from './components/Light.vue'
 import Dark_more from './components/Dark_more.vue'
 import DroneGame from './components/DroneGame.vue'
@@ -15,22 +15,26 @@ const gameVisible = ref(true)    // 控制小游戏组件挂载/销毁
 
 // 每次刷新都从白昼模式开始
 
-const leftBroken = ref(false)
-const rightBroken = ref(false)
+const corners = reactive({ tl: false, tr: false, bl: false, br: false })
 const bulbKey = ref(0)
+const maskVisible = ref(true)
 
-function onLeftBroken() {
-  leftBroken.value = true
-  checkBothBroken()
+const brokenCount = computed(() => Object.values(corners).filter(Boolean).length)
+const baseDark = computed(() => brokenCount.value / 4)
+const dark = computed(() => ({
+  tl: corners.tl ? 1 : baseDark.value,
+  tr: corners.tr ? 1 : baseDark.value,
+  bl: corners.bl ? 1 : baseDark.value,
+  br: corners.br ? 1 : baseDark.value,
+}))
+
+function onCornerBroken(corner) {
+  corners[corner] = true
+  checkAllBroken()
 }
 
-function onRightBroken() {
-  rightBroken.value = true
-  checkBothBroken()
-}
-
-function checkBothBroken() {
-  if (leftBroken.value && rightBroken.value) {
+function checkAllBroken() {
+  if (brokenCount.value === 4) {
     gameVisible.value = false
     document.documentElement.classList.add('dark-mode')
     loadingMode.value = 'night'
@@ -43,11 +47,15 @@ function checkBothBroken() {
 function onTransitionDone() {
   transitioning.value = false
   loadingDone.value = true
+  maskVisible.value = false
 }
 
 function onSwitchToLight() {
-  leftBroken.value = false
-  rightBroken.value = false
+  corners.tl = false
+  corners.tr = false
+  corners.bl = false
+  corners.br = false
+  maskVisible.value = true
   loadingDone.value = false
   loadingMode.value = 'day'
   bulbKey.value++
