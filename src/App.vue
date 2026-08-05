@@ -84,13 +84,28 @@ const navLinks = [
     <!-- 无人机石头大战 -->
     <DroneGame v-if="gameVisible" />
 
-    <!-- 灯泡层 -->
+    <!-- 光照遮罩：夜晚底色 + 4 个光源光斑 -->
+    <div v-if="maskVisible" class="light-mask">
+      <div class="night-base" :style="{ opacity: baseDark }" />
+      <div class="spot spot-tl" :style="{ opacity: 1 - dark.tl }" />
+      <div class="spot spot-tr" :style="{ opacity: 1 - dark.tr }" />
+      <div class="spot spot-bl" :style="{ opacity: 1 - dark.bl }" />
+      <div class="spot spot-br" :style="{ opacity: 1 - dark.br }" />
+    </div>
+
+    <!-- 灯泡层：四角各一个 -->
     <div class="bulb-layer">
-      <div class="bulb-left">
-        <Light :key="'left-' + bulbKey" @broken="onLeftBroken" />
+      <div class="bulb-tl">
+        <Light :key="'tl-' + bulbKey" @broken="onCornerBroken('tl')" />
       </div>
-      <div class="bulb-right">
-        <Light :key="'right-' + bulbKey" @broken="onRightBroken" />
+      <div class="bulb-tr">
+        <Light :key="'tr-' + bulbKey" @broken="onCornerBroken('tr')" />
+      </div>
+      <div class="bulb-bl">
+        <Light :key="'bl-' + bulbKey" @broken="onCornerBroken('bl')" />
+      </div>
+      <div class="bulb-br">
+        <Light :key="'br-' + bulbKey" @broken="onCornerBroken('br')" />
       </div>
     </div>
 
@@ -183,30 +198,54 @@ const navLinks = [
   justify-content: space-between;
 }
 
+/* ===== 光照遮罩层 ===== */
+.light-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.night-base {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #0c0c1a 0%, #08081a 35%, #0a0a1e 60%, #050512 100%);
+  transition: opacity 0.8s ease;
+}
+
+.spot {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  mix-blend-mode: screen;
+  transition: opacity 0.8s ease;
+}
+
+.spot-tl { background: radial-gradient(circle at 0% 0%, #ffe066 0%, transparent 60%); }
+.spot-tr { background: radial-gradient(circle at 100% 0%, #ffe066 0%, transparent 60%); }
+.spot-bl { background: radial-gradient(circle at 0% 100%, #ffe066 0%, transparent 60%); }
+.spot-br { background: radial-gradient(circle at 100% 100%, #ffe066 0%, transparent 60%); }
+
 /* ===== 灯泡层 ===== */
 .bulb-layer {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  inset: 0;
   z-index: 999;
   pointer-events: none;
 }
 
-.bulb-left,
-.bulb-right {
+.bulb-tl,
+.bulb-tr,
+.bulb-bl,
+.bulb-br {
   position: absolute;
-  top: 0;
   pointer-events: auto;
 }
 
-.bulb-left {
-  left: 0;
-}
-
-.bulb-right {
-  right: 0;
-}
+.bulb-tl { top: 0; left: 0; }
+.bulb-tr { top: 0; right: 0; }
+.bulb-bl { bottom: 0; left: 0; }
+.bulb-br { bottom: 0; right: 0; }
 
 .logo {
   font-size: 20px;
