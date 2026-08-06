@@ -156,6 +156,12 @@ const CONFIG = {
   DRIFT_MAX: 26, // 粒子固有漂移速度上限（px/s）
 }
 
+// hex (#rrggbb) → [r, g, b]，用于构造拖尾渐变
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
 // 2D 粒子：z 为 0.2~1 视差系数，速度 = 全局惯性速度 × z + 固有漂移
 class Star {
   constructor() {
@@ -210,33 +216,49 @@ class Star {
     this.z = CONFIG.STAR_MIN_SCALE + Math.random() * (1 - CONFIG.STAR_MIN_SCALE)
   }
 
-  // 速度线（流星彗尾）：沿全局速度方向 4 段延伸，越远越细越淡；亮度随速度 + 温和闪烁
+  // 速度线（流星彗尾）：单个渐细四边形 + 渐变透明度（连续平滑，无分段分层）；亮度随速度 + 温和闪烁
   render(ctx) {
     const spd = Math.hypot(velocity.x, velocity.y)
     const speedFactor = Math.min(1, spd / 300)
     const alpha = Math.min(1, 0.55 + speedFactor * 0.3 + (Math.random() - 0.5) * 0.3)
 
-    // 拖尾在运动方向的反方向（粒子身后）
-    let tailX = -velocity.x * CONFIG.TAIL_LENGTH
-    let tailY = -velocity.y * CONFIG.TAIL_LENGTH
-    if (Math.abs(tailX) < 0.1) tailX = 0.5
-    if (Math.abs(tailY) < 0.1) tailY = 0.5
-
     const lw = CONFIG.STAR_SIZE * this.z * this.sizeK * (0.7 + speedFactor * 0.3)
-    const SEGMENTS = 4
-    ctx.lineCap = 'round'
-    ctx.strokeStyle = this.color
-    for (let i = SEGMENTS; i >= 1; i--) {
-      const a = (i - 1) / SEGMENTS
-      const b = i / SEGMENTS
-      const segDist = (a + b) / 2 // 距粒子越近越小（亮粗），越远越大（淡细）
-      ctx.globalAlpha = alpha * (1 - segDist * 0.85)
-      ctx.lineWidth = lw * (1 - segDist * 0.7)
+    // 拖尾在运动方向的反方向（粒子身后）；长度随粒子大小缩放：最小 0.5 倍，最大 2.2 倍
+    const tailScale = 0.5 + (this.z * this.sizeK - 0.06) * 1.7 / 2.44
+    const tailX = -velocity.x * CONFIG.TAIL_LENGTH * tailScale
+    const tailY = -velocity.y * CONFIG.TAIL_LENGTH * tailScale
+    const len = Math.hypot(tailX, tailY)
+
+    // 拖尾：从头宽 (lw) 平滑收窄到尖端，透明度沿拖尾方向连续衰减
+    if (len >= 0.1) {
+      const nx = -tailY / len // 拖尾方向单位法向量
+      const ny = tailX / len
+      const hw = lw / 2
+      const tw = hw * 0.08 // 尾端近尖端
+      const [r, g, b] = hexToRgb(this.color)
+      const grad = ctx.createLinearGradient(this.x, this.y, this.x + tailX, this.y + tailY)
+      grad.addColorStop(0, `rgba(${r},${g},${b},${alpha})`)
+      grad.addColorStop(0.25, `rgba(${r},${g},${b},${alpha * 0.75})`)
+      grad.addColorStop(0.65, `rgba(${r},${g},${b},${alpha * 0.35})`)
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`)
+
+      ctx.fillStyle = grad
       ctx.beginPath()
-      ctx.moveTo(this.x + tailX * a, this.y + tailY * a)
-      ctx.lineTo(this.x + tailX * b, this.y + tailY * b)
-      ctx.stroke()
+      ctx.moveTo(this.x + nx * hw, this.y + ny * hw)
+      ctx.lineTo(this.x - nx * hw, this.y - ny * hw)
+      ctx.lineTo(this.x + tailX - nx * tw, this.y + tailY - ny * tw)
+      ctx.lineTo(this.x + tailX + nx * tw, this.y + tailY + ny * tw)
+      ctx.closePath()
+      ctx.fill()
     }
+
+    // 头部光核：粒子本体圆点（静止时也显示为圆点）
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = this.color
+    ctx.beginPath()
+    ctx.arc(this.x, this.y, lw / 2, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.globalAlpha = 1
   }
 }
 

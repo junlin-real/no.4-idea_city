@@ -16,7 +16,7 @@
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: light dark;
+  color-scheme: light; /* 默认浅色主题，暗色由 .dark-mode 覆盖，原生滚动条跟随应用主题 */
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -46,6 +46,9 @@
 
 /* 灯泡破碎后强制深色模式 */
 .dark-mode {
+  color-scheme: dark; /* 原生滚动条切换为暗色 */
+  scrollbar-width: thin; /* Firefox 滚动条宽度 */
+  scrollbar-color: #2e3a55 #111d33; /* Firefox：滑块 轨道 */
   --text: #9ca3af;
   --text-h: #f3f4f6;
   --bg: #16171d;
@@ -77,4 +80,34 @@ h1, h2, h3 {
 
 a {
   color: inherit;
+}
+
+/* ===== 暗色模式滚动条（WebKit/Blink：Chrome、Edge、Safari） =====
+   轨道呼应夜空渐变 (.stars-sky)，滑块为暗蓝灰，白天模式保持系统默认浅色 */
+.dark-mode::-webkit-scrollbar,
+.dark-mode ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dark-mode::-webkit-scrollbar-track,
+.dark-mode ::-webkit-scrollbar-track {
+  background: #111d33;
+}
+
+.dark-mode::-webkit-scrollbar-thumb,
+.dark-mode ::-webkit-scrollbar-thumb {
+  background: #2e3a55;
+  border: 2px solid #111d33;
+  border-radius: 6px;
+}
+
+.dark-mode::-webkit-scrollbar-thumb:hover,
+.dark-mode ::-webkit-scrollbar-thumb:hover {
+  background: #42547e;
+}
+
+.dark-mode::-webkit-scrollbar-corner,
+.dark-mode ::-webkit-scrollbar-corner {
+  background: #111d33;
 }

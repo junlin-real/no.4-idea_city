@@ -98,8 +98,9 @@ const navLinks = [
       </div>
     </header>
 
-    <!-- 夜城连续背景区（Hero + 超立方体，仅黑夜模式） -->
+    <!-- 日夜城市背景区（Hero + 超立方体 + 作品区）：白天 sun_city，黑夜 city3 -->
     <div class="night-scene">
+      <div class="day-scene-bg" aria-hidden="true"></div>
       <div class="night-scene-bg" aria-hidden="true"></div>
 
     <!-- Hero 横幅 -->
@@ -164,10 +165,15 @@ const navLinks = [
   position: sticky;
   top: 0;
   z-index: 100;
-  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  background: #a5c8e8; /* 白天：柔和天空蓝 */
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   transition: background-color 0.4s ease, border-color 0.4s ease;
+}
+
+/* 黑夜模式：透明毛玻璃，透出夜空 */
+.dark-mode .navbar {
+  background: transparent;
 }
 
 .navbar-inner {
@@ -228,9 +234,32 @@ const navLinks = [
   color: var(--accent);
 }
 
-/* ===== 夜城连续背景（Hero + 超立方体 + 作品区，仅黑夜模式） ===== */
+/* ===== 日夜城市背景（Hero + 超立方体 + 作品区） ===== */
 .night-scene {
   position: relative;
+}
+
+/* 白天城市背景（sun_city）：随内容滚动，默认可见，黑夜时淡出 */
+.day-scene-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  background: url('/sun_city.png') center top / 100% auto no-repeat;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.dark-mode .day-scene-bg {
+  opacity: 0;
+}
+
+/* 浅色遮罩：保证白天文字可读（对应黑夜的深色遮罩） */
+.day-scene-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.6) 100%);
 }
 
 /* 宽度铺满、高度按比例：两侧不留白；下方在窄屏时留白 */
@@ -262,13 +291,11 @@ const navLinks = [
   max-width: 1120px;
   margin: 0 auto;
   padding: 80px 24px 80px;
-}
-
-/* 黑夜模式：Hero 加高，配合 city3 连续背景 */
-.dark-mode .hero {
+  /* 撑满视口并垂直居中，配合日夜城市背景 */
   min-height: 100vh;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 .hero-layout {
@@ -280,6 +307,7 @@ const navLinks = [
 .hero-right {
   flex: 1;
   min-width: 0;
+  text-align: center;
 }
 
 .hero-tag {
@@ -388,7 +416,13 @@ const navLinks = [
 .footer {
   margin-top: auto;
   border-top: 1px solid var(--border);
-  transition: border-color 0.4s ease;
+  background: #a5c8e8; /* 白天：柔和天空蓝 */
+  transition: border-color 0.4s ease, background-color 0.4s ease;
+}
+
+/* 黑夜模式：透明透出夜空 */
+.dark-mode .footer {
+  background: transparent;
 }
 
 .footer-inner {
@@ -424,7 +458,7 @@ const navLinks = [
 
 /* ===== 响应式 ===== */
 @media (max-width: 768px) {
-  .dark-mode .hero {
+  .hero {
     min-height: 90vh;
   }
 
