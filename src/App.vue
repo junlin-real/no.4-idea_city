@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref } from 'vue'
 import Light from './components/Light.vue'
 import Dark_more from './components/Dark_more.vue'
 import DroneGame from './components/DroneGame.vue'
@@ -15,26 +15,22 @@ const gameVisible = ref(true)    // 控制小游戏组件挂载/销毁
 
 // 每次刷新都从白昼模式开始
 
-const corners = reactive({ tl: false, tr: false, bl: false, br: false })
+const leftBroken = ref(false)
+const rightBroken = ref(false)
 const bulbKey = ref(0)
-const maskVisible = ref(true)
 
-const brokenCount = computed(() => Object.values(corners).filter(Boolean).length)
-const baseDark = computed(() => brokenCount.value / 4)
-const dark = computed(() => ({
-  tl: corners.tl ? 1 : baseDark.value,
-  tr: corners.tr ? 1 : baseDark.value,
-  bl: corners.bl ? 1 : baseDark.value,
-  br: corners.br ? 1 : baseDark.value,
-}))
-
-function onCornerBroken(corner) {
-  corners[corner] = true
-  checkAllBroken()
+function onLeftBroken() {
+  leftBroken.value = true
+  checkBothBroken()
 }
 
-function checkAllBroken() {
-  if (brokenCount.value === 4) {
+function onRightBroken() {
+  rightBroken.value = true
+  checkBothBroken()
+}
+
+function checkBothBroken() {
+  if (leftBroken.value && rightBroken.value) {
     gameVisible.value = false
     document.documentElement.classList.add('dark-mode')
     loadingMode.value = 'night'
@@ -47,15 +43,11 @@ function checkAllBroken() {
 function onTransitionDone() {
   transitioning.value = false
   loadingDone.value = true
-  maskVisible.value = false
 }
 
 function onSwitchToLight() {
-  corners.tl = false
-  corners.tr = false
-  corners.bl = false
-  corners.br = false
-  maskVisible.value = true
+  leftBroken.value = false
+  rightBroken.value = false
   loadingDone.value = false
   loadingMode.value = 'day'
   bulbKey.value++
@@ -84,28 +76,13 @@ const navLinks = [
     <!-- 无人机石头大战 -->
     <DroneGame v-if="gameVisible" />
 
-    <!-- 光照遮罩：夜晚底色 + 4 个光源光斑 -->
-    <div v-if="maskVisible" class="light-mask">
-      <div class="night-base" :style="{ opacity: baseDark }" />
-      <div class="spot spot-tl" :style="{ opacity: 1 - dark.tl }" />
-      <div class="spot spot-tr" :style="{ opacity: 1 - dark.tr }" />
-      <div class="spot spot-bl" :style="{ opacity: 1 - dark.bl }" />
-      <div class="spot spot-br" :style="{ opacity: 1 - dark.br }" />
-    </div>
-
-    <!-- 灯泡层：四角各一个 -->
+    <!-- 灯泡层 -->
     <div class="bulb-layer">
-      <div class="bulb-tl">
-        <Light :key="'tl-' + bulbKey" @broken="onCornerBroken('tl')" />
+      <div class="bulb-left">
+        <Light :key="'left-' + bulbKey" @broken="onLeftBroken" />
       </div>
-      <div class="bulb-tr">
-        <Light :key="'tr-' + bulbKey" @broken="onCornerBroken('tr')" />
-      </div>
-      <div class="bulb-bl">
-        <Light :key="'bl-' + bulbKey" @broken="onCornerBroken('bl')" />
-      </div>
-      <div class="bulb-br">
-        <Light :key="'br-' + bulbKey" @broken="onCornerBroken('br')" />
+      <div class="bulb-right">
+        <Light :key="'right-' + bulbKey" @broken="onRightBroken" />
       </div>
     </div>
 
@@ -120,6 +97,10 @@ const navLinks = [
         </nav>
       </div>
     </header>
+
+    <!-- 夜城连续背景区（Hero + 超立方体，仅黑夜模式） -->
+    <div class="night-scene">
+      <div class="night-scene-bg" aria-hidden="true"></div>
 
     <!-- Hero 横幅 -->
     <section class="hero">
@@ -151,6 +132,7 @@ const navLinks = [
         <PortfolioCarousel />
       </div>
     </section>
+    </div>
 
     <!-- 页脚 -->
     <footer id="about" class="footer">
@@ -198,54 +180,30 @@ const navLinks = [
   justify-content: space-between;
 }
 
-/* ===== 光照遮罩层 ===== */
-.light-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  pointer-events: none;
-}
-
-.night-base {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, #0c0c1a 0%, #08081a 35%, #0a0a1e 60%, #050512 100%);
-  transition: opacity 0.8s ease;
-}
-
-.spot {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  mix-blend-mode: screen;
-  transition: opacity 0.8s ease;
-}
-
-.spot-tl { background: radial-gradient(circle at 0% 0%, #ffe066 0%, transparent 60%); }
-.spot-tr { background: radial-gradient(circle at 100% 0%, #ffe066 0%, transparent 60%); }
-.spot-bl { background: radial-gradient(circle at 0% 100%, #ffe066 0%, transparent 60%); }
-.spot-br { background: radial-gradient(circle at 100% 100%, #ffe066 0%, transparent 60%); }
-
 /* ===== 灯泡层 ===== */
 .bulb-layer {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 999;
   pointer-events: none;
 }
 
-.bulb-tl,
-.bulb-tr,
-.bulb-bl,
-.bulb-br {
+.bulb-left,
+.bulb-right {
   position: absolute;
+  top: 0;
   pointer-events: auto;
 }
 
-.bulb-tl { top: 0; left: 0; }
-.bulb-tr { top: 0; right: 0; }
-.bulb-bl { bottom: 0; left: 0; }
-.bulb-br { bottom: 0; right: 0; }
+.bulb-left {
+  left: 0;
+}
+
+.bulb-right {
+  right: 0;
+}
 
 .logo {
   font-size: 20px;
@@ -270,11 +228,47 @@ const navLinks = [
   color: var(--accent);
 }
 
+/* ===== 夜城连续背景（Hero + 超立方体 + 作品区，仅黑夜模式） ===== */
+.night-scene {
+  position: relative;
+}
+
+/* 宽度铺满、高度按比例：两侧不留白；下方在窄屏时留白 */
+.night-scene-bg {
+  filter: brightness(0.8);
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  background: url('/city3.png') center top / 100% auto no-repeat;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.dark-mode .night-scene-bg {
+  opacity: 1;
+}
+
+/* 暗色遮罩（稍微加深）：保证内容可读 */
+.night-scene-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(10, 15, 28, 0.5) 0%, rgba(10, 15, 28, 0.7) 100%);
+}
+
 /* ===== Hero ===== */
 .hero {
   max-width: 1120px;
   margin: 0 auto;
   padding: 80px 24px 80px;
+}
+
+/* 黑夜模式：Hero 加高，配合 city3 连续背景 */
+.dark-mode .hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
 }
 
 .hero-layout {
@@ -430,6 +424,10 @@ const navLinks = [
 
 /* ===== 响应式 ===== */
 @media (max-width: 768px) {
+  .dark-mode .hero {
+    min-height: 90vh;
+  }
+
   .hero {
     padding: 40px 20px 50px;
   }

@@ -1,6 +1,12 @@
 <template>
-  <!-- 星空画布：置于页面内容最底层 -->
+  <!-- 夜空背景层（渐变）：置于最底层 -->
+  <div v-if="isDark" class="stars-sky" aria-hidden="true"></div>
+
+  <!-- 星空画布：透明，渲染在下层背景之上 -->
   <canvas v-if="isDark" ref="starCanvasRef" class="stars-canvas" />
+
+  <!-- 月亮光晕层：独立于画布之上 -->
+  <div v-if="isDark" class="moon-glow" aria-hidden="true"></div>
 
   <!-- 月亮：置于内容上层，保持可点击 -->
   <div v-if="isDark" class="moon" :class="{ shaking: isShaking }" @click="handleClick">
@@ -134,15 +140,12 @@ let lastMX = 0
 let lastMY = 0
 let lastMT = 0
 
-// 星空渐变背景（夜空蓝底 + 月亮光晕）
-let skyGradient = null
-let haloGradient = null
+// 星空蓝光晕（画布层绘制，加色混合）
+let blueGlows = []
 
 const CONFIG = {
-  MOON_CENTER_X_RIGHT: 95, // 月亮中心距右边缘 px（月亮 90px 宽，right: 50px）
-  MOON_CENTER_Y_TOP: 115, // 月亮中心距上边缘 px（top: 70px + 45px）
-  PARTICLE_DIV: 5, // 粒子数 = (宽 + 高) / 该值（密度更大）
-  STAR_SIZE: 3, // 速度线基准宽度（参考值）
+  PARTICLE_DIV: 5, // 粒子数 = (宽 + 高) / 该值（密度）
+  STAR_SIZE: 5, // 速度线基准宽度（粒子体型）
   STAR_MIN_SCALE: 0.2, // 粒子 z 缩放下限（视差系数，参考值）
   OVERFLOW_THRESHOLD: 50, // 出界回收阈值（px，参考值）
   POINTER_GAIN: 3.5, // 鼠标位移 → 目标速度增益（粒子速度 ≈ 鼠标速度 1.45 倍×z）
@@ -242,33 +245,20 @@ function initStars() {
   stars = Array.from({ length: count }, () => new Star())
 }
 
-// 构建背景：淡红（月亮）→ 夜空蓝全屏平滑过渡
-function buildGradients() {
+// 构建星空蓝光晕：三处柔和蓝色辉光（避开月亮方向）
+function buildBlueGlows() {
   if (!starCtx) return
-  skyGradient = starCtx.createLinearGradient(0, 0, 0, starH)
-  skyGradient.addColorStop(0, '#182a45')
-  skyGradient.addColorStop(1, '#111d33')
-  const mx = starW - CONFIG.MOON_CENTER_X_RIGHT
-  const my = CONFIG.MOON_CENTER_Y_TOP
-  // 全屏径向：月亮附近淡黄→淡红，向外平滑过渡到夜空蓝
-  const r = Math.hypot(mx, my) * 1.1
-  haloGradient = starCtx.createRadialGradient(mx, my, 0, mx, my, r)
-  haloGradient.addColorStop(0, 'rgba(255, 236, 170, 0.45)') // 淡黄（月亮核心）
-  haloGradient.addColorStop(0.12, 'rgba(255, 165, 125, 0.32)') // 淡红
-  haloGradient.addColorStop(0.45, 'rgba(120, 90, 140, 0.18)') // 红紫过渡
-  haloGradient.addColorStop(0.8, 'rgba(40, 60, 100, 0.08)') // 偏蓝
-  haloGradient.addColorStop(1, 'rgba(28, 46, 80, 0)') // 融入夜空蓝
-}
-
-// 首帧铺满背景打底
-function paintBase() {
-  if (!starCtx) return
-  starCtx.globalAlpha = 1
-  starCtx.fillStyle = skyGradient
-  starCtx.fillRect(0, 0, starW, starH)
-  starCtx.fillStyle = haloGradient
-  starCtx.fillRect(0, 0, starW, starH)
-  starCtx.globalAlpha = 1
+  function glow(cx, cy, r, color, stop) {
+    const g = starCtx.createRadialGradient(cx, cy, 0, cx, cy, r)
+    g.addColorStop(0, color)
+    g.addColorStop(stop, 'rgba(0, 0, 0, 0)')
+    return g
+  }
+  blueGlows = [
+    glow(starW * 0.3, starH * 0.65, starW * 0.5, 'rgba(100, 152, 255, 0.17)', 0.68),
+    glow(starW * 0.16, starH * 0.16, starW * 0.32, 'rgba(128, 174, 255, 0.13)', 0.62),
+    glow(starW * 0.82, starH * 0.85, starW * 0.32, 'rgba(80, 130, 240, 0.10)', 0.65),
+  ]
 }
 
 function resizeStars() {
@@ -283,8 +273,7 @@ function resizeStars() {
   canvas.style.height = starH + 'px'
   starCtx = canvas.getContext('2d')
   starCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  buildGradients()
-  paintBase()
+  buildBlueGlows()
   initStars()
 }
 
@@ -302,13 +291,19 @@ function renderStars(now) {
   velocity.x += (velocity.tx - velocity.x) * ease
   velocity.y += (velocity.ty - velocity.y) * ease
 
-  // 每帧清屏重绘背景与粒子：粒子运动不留下蒙版轨迹
+  // 每帧清屏：画布透明，露出下层背景（夜空渐变 / city3 城市图）
   ctx.clearRect(0, 0, starW, starH)
-  ctx.globalAlpha = 1
-  ctx.fillStyle = skyGradient
-  ctx.fillRect(0, 0, starW, starH)
-  ctx.fillStyle = haloGradient
-  ctx.fillRect(0, 0, starW, starH)
+
+  // 光效：星空蓝光晕以加色混合叠在下层背景上
+  if (blueGlows.length) {
+    ctx.globalCompositeOperation = 'lighter'
+    ctx.globalAlpha = 1
+    for (const g of blueGlows) {
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, starW, starH)
+    }
+    ctx.globalCompositeOperation = 'source-over'
+  }
 
   for (const s of stars) {
     s.update(dt)
@@ -477,6 +472,31 @@ onMounted(() => {
     transform: scale(2.2);
     opacity: 0;
   }
+}
+
+/* ===== 夜空背景层（渐变） ===== */
+.stars-sky {
+  position: fixed;
+  inset: 0;
+  z-index: -4;
+  pointer-events: none;
+  background: linear-gradient(180deg, #182a45 0%, #111d33 100%);
+}
+
+/* ===== 月亮光晕层（独立于画布之上，z 0） ===== */
+.moon-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* 月亮中心：距右 95px、距上 115px（与月亮位置对应） */
+  background: radial-gradient(circle at calc(100% - 95px) 115px,
+    rgba(255, 236, 170, 0.5) 0%,
+    rgba(255, 165, 125, 0.35) 12%,
+    rgba(120, 90, 140, 0.2) 45%,
+    rgba(40, 60, 100, 0.08) 80%,
+    rgba(28, 46, 80, 0) 100%);
+  mix-blend-mode: screen;
 }
 
 /* ===== 星星（canvas） ===== */
