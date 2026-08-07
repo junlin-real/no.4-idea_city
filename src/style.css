@@ -69,7 +69,13 @@
 
 body {
   margin: 0;
+  /* 背景视差的 scale(1.1) 会横向溢出视口，这里禁止水平滚动 */
+  overflow-x: hidden;
   transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 h1, h2, h3 {

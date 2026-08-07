@@ -1,9 +1,4 @@
 <template>
-  <!-- 召唤按钮（仅白天模式） -->
-  <button v-if="!isDark" class="drone-summon-btn" @click="summonDrone">
-    🛸 小游戏
-  </button>
-
   <!-- 拍照闪光遮罩 -->
   <Transition name="flash">
     <div v-if="showFlash" class="flash-overlay" />

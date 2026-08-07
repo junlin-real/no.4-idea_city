@@ -51,14 +51,14 @@ const intro = () => {
   })
     .to(katana, {
       y: () => -katana.getBoundingClientRect().height / 2,
-      duration: 0.6,
+      duration: 0.4,
       ease: "power4.out",
-      delay: 0.6,
+      delay: 0.3,
     })
     .to(katana, {
       y: () => -katana.getBoundingClientRect().height / 2 - window.innerHeight,
       x: () => window.innerWidth,
-      duration: 1,
+      duration: 0.7,
       ease: "power4.inOut",
     }, "<0.3")
 }

@@ -1,10 +1,11 @@
 <script setup>
-import { ref } from 'vue'
-import Light from './components/Light.vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import gsap from 'gsap'
 import Dark_more from './components/Dark_more.vue'
 import DroneGame from './components/DroneGame.vue'
 import PortfolioCarousel from './components/PortfolioCarousel.vue'
 import HyperCube from './components/HyperCube.vue'
+import PendantLight from './components/PendantLight.vue'
 import loding from './components/loding.vue'
 
 const loadingDone = ref(false)
@@ -15,29 +16,16 @@ const gameVisible = ref(true)    // 控制小游戏组件挂载/销毁
 
 // 每次刷新都从白昼模式开始
 
-const leftBroken = ref(false)
-const rightBroken = ref(false)
-const bulbKey = ref(0)
+const lampKey = ref(0)
 
-function onLeftBroken() {
-  leftBroken.value = true
-  checkBothBroken()
-}
-
-function onRightBroken() {
-  rightBroken.value = true
-  checkBothBroken()
-}
-
-function checkBothBroken() {
-  if (leftBroken.value && rightBroken.value) {
-    gameVisible.value = false
-    document.documentElement.classList.add('dark-mode')
-    loadingMode.value = 'night'
-    loadingKey.value++
-    transitioning.value = true
-    loadingDone.value = false
-  }
+// 吊灯打破 → 直接坠入黑夜
+function onLampBroken() {
+  gameVisible.value = false
+  document.documentElement.classList.add('dark-mode')
+  loadingMode.value = 'night'
+  loadingKey.value++
+  transitioning.value = true
+  loadingDone.value = false
 }
 
 function onTransitionDone() {
@@ -46,18 +34,160 @@ function onTransitionDone() {
 }
 
 function onSwitchToLight() {
-  leftBroken.value = false
-  rightBroken.value = false
   loadingDone.value = false
   loadingMode.value = 'day'
-  bulbKey.value++
+  lampKey.value++
   gameVisible.value = true
 }
 
+/* ===== Hero 入场序列：文字逐字打出，其余元素依次浮现 ===== */
+
+// 打字机：逐个字符写入，保留原有标签结构（<br>、<span class="accent"> 等）
+function typeWriter(el, delay) {
+  return new Promise((resolve) => {
+    const tokens = el.innerHTML.match(/<[^>]*>|[^<]+/g) || []
+    const total = tokens.reduce(
+      (n, t) => (t.startsWith('<') ? n : n + t.length),
+      0
+    )
+    let shown = 0
+    el.style.opacity = 1
+    el.textContent = ''
+
+    // 光标
+    const caret = document.createElement('span')
+    caret.className = 'type-caret'
+    caret.setAttribute('aria-hidden', 'true')
+
+    function tick() {
+      // 按已显示字符数重建 innerHTML
+      let out = ''
+      let remaining = shown
+      for (const t of tokens) {
+        if (t.startsWith('<')) {
+          out += t
+          continue
+        }
+        const take = Math.min(remaining, t.length)
+        out += t.slice(0, take)
+        remaining -= take
+        if (remaining <= 0) break
+      }
+      el.innerHTML = out
+
+      if (shown < total) {
+        shown++
+        setTimeout(tick, delay)
+      } else {
+        el.appendChild(caret)
+        resolve()
+      }
+    }
+    tick()
+  })
+}
+
+watch(loadingDone, async (done) => {
+  if (!done) return
+  const typeEl = document.querySelector('.hero-type')
+  const fadeEls = [...document.querySelectorAll('.hero-reveal')]
+
+  // 减弱动效：全部直接显示
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (typeEl) typeEl.style.opacity = 1
+    fadeEls.forEach((el) => el.classList.remove('hero-reveal'))
+    return
+  }
+
+  // 打字前缓存完整 HTML（含 <br>、accent 高亮），便于减弱动效时直接恢复
+  if (typeEl) typeEl.dataset.fullText = typeEl.innerHTML
+
+  // 编排：① 标签淡入 → ② 标题打字 → ③ 其余依次淡入
+  const reveal = (els, startDelay = 0) => {
+    if (!els.length) return
+    gsap.fromTo(
+      els,
+      { opacity: 0, y: 26 },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
+        stagger: 0.09,
+        delay: startDelay,
+        ease: 'power3.out',
+        overwrite: true,
+        // 先移除隐藏类再清内联样式，避免 clearProps 把元素打回透明导致闪烁
+        onComplete: () => {
+          els.forEach((el) => el.classList.remove('hero-reveal'))
+          gsap.set(els, { clearProps: 'transform,opacity' })
+        },
+      }
+    )
+  }
+
+  const [first, ...rest] = fadeEls
+  reveal(first ? [first] : [])
+
+  if (typeEl) await typeWriter(typeEl, Number(typeEl.dataset.typeDelay) || 95)
+
+  document.querySelectorAll('.type-caret').forEach((c) => c.remove())
+  reveal(rest)
+})
+
+/* ===== 滚动入场：区块进入视口时淡入上移 ===== */
+let revealObserver = null
+
+function setupReveal() {
+  const els = document.querySelectorAll('.reveal')
+  if (!els.length) return
+  revealObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('reveal-in')
+          revealObserver.unobserve(entry.target)
+        }
+      }
+    },
+    { threshold: 0.15, rootMargin: '0px 0px -48px 0px' }
+  )
+  els.forEach((el) => revealObserver.observe(el))
+}
+
+/* ===== 背景视差：城市背景随滚动轻微上移 ===== */
+const dayBgRef = ref(null)
+const nightBgRef = ref(null)
+let scrollRaf = null
+
+function onScroll() {
+  if (scrollRaf) return
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = null
+    const y = Math.min(window.scrollY * -0.05, -45)
+    const transform = `translate3d(0, ${y}px, 0) scale(1.1)`
+    if (dayBgRef.value) dayBgRef.value.style.transform = transform
+    if (nightBgRef.value) nightBgRef.value.style.transform = transform
+  })
+}
+
+onMounted(() => {
+  setupReveal()
+  window.addEventListener('scroll', onScroll, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  revealObserver?.disconnect()
+  window.removeEventListener('scroll', onScroll)
+  if (scrollRaf) cancelAnimationFrame(scrollRaf)
+})
+
 const navLinks = [
   { label: '作品', href: '#portfolio' },
-  { label: '关于', href: '#about' },
+  { label: '实验室', href: '#lab' },
+  { label: '联系', href: '#contact' },
 ]
+
+const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
 
 </script>
 
@@ -76,20 +206,10 @@ const navLinks = [
     <!-- 无人机石头大战 -->
     <DroneGame v-if="gameVisible" />
 
-    <!-- 灯泡层 -->
-    <div class="bulb-layer">
-      <div class="bulb-left">
-        <Light :key="'left-' + bulbKey" @broken="onLeftBroken" />
-      </div>
-      <div class="bulb-right">
-        <Light :key="'right-' + bulbKey" @broken="onRightBroken" />
-      </div>
-    </div>
-
     <!-- 导航栏 -->
     <header class="navbar">
       <div class="navbar-inner">
-        <a href="#" class="logo">Welcome</a>
+        <a href="#" class="logo">JunLin <span class="logo-moon">◐</span></a>
         <nav class="nav-links">
           <a v-for="link in navLinks" :key="link.label" :href="link.href" class="nav-link">
             {{ link.label }}
@@ -100,49 +220,95 @@ const navLinks = [
 
     <!-- 日夜城市背景区（Hero + 超立方体 + 作品区）：白天 sun_city，黑夜 city3 -->
     <div class="night-scene">
-      <div class="day-scene-bg" aria-hidden="true"></div>
-      <div class="night-scene-bg" aria-hidden="true"></div>
+      <div class="day-scene-bg" ref="dayBgRef" aria-hidden="true"></div>
+      <div class="night-scene-bg" ref="nightBgRef" aria-hidden="true"></div>
 
     <!-- Hero 横幅 -->
     <section class="hero">
-      <div class="hero-layout">
-        <div class="hero-right">
-          <p class="hero-tag">欢迎您</p>
-          <h1 class="hero-title">你好，我是<br /><span class="accent">JunLin</span></h1>
-          <p class="hero-desc">
-            这里是我的个人网站，我希望用这个网站来分享我的想法和创作，同时这个网站也是我的求职网站，虽然还在完善中，但我希望它能成为我职业发展的见证。
-          </p>
-          <div class="hero-actions">
+      <div class="hero-grid">
+        <div class="hero-main">
+          <p class="hero-tag hero-reveal">前端开发者 · 白日梦想家</p>
+          <h1 class="hero-title hero-type" data-type-delay="130">你好，我是<br /><span class="accent">JunLin</span></h1>
+          <p class="hero-sub hero-reveal">把想法做成看得见的东西</p>
+          <p class="hero-desc hero-reveal">前端开发者，专注动效与交互。</p>
+          <div class="hero-actions hero-reveal">
             <a href="#portfolio" class="btn btn-primary">查看作品</a>
+            <a href="#lab" class="btn btn-secondary">深夜实验室</a>
           </div>
         </div>
+        <aside class="hero-meta hero-reveal">
+          <p>2026</p>
+          <p>PORTFOLIO<br />NO.4</p>
+        </aside>
       </div>
-    </section>
-
-    <!-- 超立方体展示 -->
-    <section class="section hypercube-section">
-      <div class="section-inner hypercube-inner">
-        <HyperCube />
+      <div class="hero-strip hero-reveal">
+        <a href="mailto:hello@junlin.dev">hello@junlin.dev</a>
+        <a href="#">GitHub ↗</a>
+        <span class="hero-scroll">↓ 滚动进入这座城市</span>
       </div>
     </section>
 
     <!-- 作品展示 -->
-    <section id="portfolio" class="section section-alt">
+    <section id="portfolio" class="section">
       <div class="section-inner">
-        <h2 class="section-title">作品展示</h2>
-        <PortfolioCarousel />
+        <div class="sec-head reveal">
+          <h2 class="sec-title"><span class="sec-no">01</span>作品展示</h2>
+          <span class="sec-line" aria-hidden="true"></span>
+          <p class="sec-guide mono">SELECTED WORKS / 2024–2026</p>
+        </div>
+        <PortfolioCarousel class="reveal" />
+      </div>
+    </section>
+
+    <!-- 深夜实验室：超立方体 + 关于我 -->
+    <section id="lab" class="section lab-section">
+      <div class="section-inner">
+        <!-- 吊灯：absolute 挂在区块右侧，随区块滚动；可拖拽晃动，甩动或点击三次打破，坠入黑夜 -->
+        <div class="pendant-layer">
+          <PendantLight :key="lampKey" @broken="onLampBroken" />
+        </div>
+
+        <div class="sec-head reveal">
+          <h2 class="sec-title"><span class="sec-no">02</span>深夜实验室</h2>
+          <span class="sec-line" aria-hidden="true"></span>
+          <p class="sec-guide">把代码当成玩具，把深夜留给实验。</p>
+        </div>
+
+        <div class="lab-grid reveal">
+          <div class="lab-visual">
+            <div class="hypercube-inner">
+              <HyperCube />
+            </div>
+            <p class="lab-caption">可交互 · 拖拽旋钮调色</p>
+          </div>
+          <div class="lab-body">
+            <p class="lab-motto">「白天是程序，深夜是魔法」</p>
+            <div class="lab-about">
+              <h3 class="lab-about-title">关于我</h3>
+              <p>
+                自 2022 年起自学前端，沉迷于动效与交互，喜欢把东西做得“能玩”。
+              </p>
+            </div>
+            <div class="lab-tags">
+              <span v-for="tag in skillTags" :key="tag" class="skill-chip">{{ tag }}</span>
+            </div>
+            <a href="#contact" class="lab-cta">把灯泡打破，我们聊聊 ↓</a>
+          </div>
+        </div>
       </div>
     </section>
     </div>
 
-    <!-- 页脚 -->
-    <footer id="about" class="footer">
+    <!-- 页脚 · 联系 -->
+    <footer id="contact" class="footer">
       <div class="footer-inner">
-        <p class="footer-copy">&copy; 2026 YourName. All rights reserved.</p>
+        <div class="footer-brand">
+          <p class="footer-name">JunLin · 独立创作者</p>
+          <p class="footer-copy">&copy; 2026 JunLin · 用代码和好奇心搭建</p>
+        </div>
         <div class="footer-links">
+          <a href="mailto:hello@junlin.dev">hello@junlin.dev</a>
           <a href="#">GitHub</a>
-          <a href="#">Twitter</a>
-          <a href="#">Email</a>
         </div>
       </div>
     </footer>
@@ -158,6 +324,61 @@ const navLinks = [
   display: flex;
   flex-direction: column;
   transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* ===== 动效状态 ===== */
+/* Hero 入场：文字初始隐藏（打字机开始后显示），按钮等由 gsap 依次浮现 */
+.hero-type {
+  opacity: 0;
+}
+
+.hero-reveal {
+  opacity: 0;
+}
+
+/* 打字机光标 */
+.type-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background: currentColor;
+  vertical-align: -0.1em;
+  animation: caret-blink 0.9s steps(2, start) infinite;
+}
+
+@keyframes caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* 滚动入场：初始隐藏，进入视口后加 .reveal-in */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* 用户偏好减弱动效时，直接显示内容 */
+@media (prefers-reduced-motion: reduce) {
+  .hero-reveal,
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* 锚点跳转时避开吸顶导航 */
+#portfolio,
+#lab,
+#contact {
+  scroll-margin-top: 60px;
 }
 
 /* ===== 导航栏 ===== */
@@ -186,29 +407,32 @@ const navLinks = [
   justify-content: space-between;
 }
 
-/* ===== 灯泡层 ===== */
-.bulb-layer {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 999;
+/* ===== 吊灯层：absolute，悬挂点对齐引导语「把代码当成玩具…」那一行 ===== */
+.pendant-layer {
+  position: absolute;
+  /* 区块 padding-top 80px + sec-head 半高，让悬挂点落在引导语垂直中心 */
+  top: 102px;
+  right: 16px;
+  z-index: 60;
   pointer-events: none;
 }
 
-.bulb-left,
-.bulb-right {
-  position: absolute;
-  top: 0;
+.pendant-layer > * {
   pointer-events: auto;
 }
 
-.bulb-left {
-  left: 0;
-}
+/* 小屏：灯缩小并往区块右下收，避免遮挡内容 */
+@media (max-width: 768px) {
+  .pendant-layer {
+    top: auto;
+    bottom: 8px;
+    right: 8px;
+  }
 
-.bulb-right {
-  right: 0;
+  .pendant-layer :deep(.pendant) {
+    transform: scale(0.72);
+    transform-origin: bottom right;
+  }
 }
 
 .logo {
@@ -216,6 +440,14 @@ const navLinks = [
   font-weight: 600;
   color: var(--text-h);
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.logo-moon {
+  color: var(--accent);
+  font-size: 16px;
 }
 
 .nav-links {
@@ -290,39 +522,56 @@ const navLinks = [
 .hero {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 80px 24px 80px;
+  padding: 96px 24px 0;
   /* 撑满视口并垂直居中，配合日夜城市背景 */
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: center;
 }
 
-.hero-layout {
-  display: flex;
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 64px;
   align-items: center;
-  gap: 48px;
 }
 
-.hero-right {
-  flex: 1;
+.hero-main {
   min-width: 0;
-  text-align: center;
+  text-align: left;
+}
+
+.hero-meta {
+  border-left: 1px solid var(--border);
+  padding-left: 28px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.9;
+  letter-spacing: 2px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hero-meta p {
+  margin: 0;
 }
 
 .hero-tag {
-  font-size: 30px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
+  font-size: 15px;
+  letter-spacing: 5px;
   color: var(--accent);
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  opacity: 0.9;
 }
 
 .hero-title {
-  font-size: 45px;
-  line-height: 1.2;
-  letter-spacing: -1.5px;
-  margin: 0 0 20px;
+  font-size: 60px;
+  line-height: 1.12;
+  letter-spacing: -2px;
+  margin: 0 0 16px;
   color: var(--text-h);
 }
 
@@ -330,18 +579,59 @@ const navLinks = [
   color: var(--accent);
 }
 
+.hero-sub {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text-h);
+  margin: 0 0 20px;
+}
+
 .hero-desc {
   font-size: 18px;
   line-height: 1.7;
   color: var(--text);
   max-width: 540px;
-  margin: 0 auto 36px;
+  margin: 0 0 36px;
+}
+
+.hero-strip {
+  margin-top: auto;
+  padding: 22px 0 26px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.hero-strip a {
+  color: var(--text);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.hero-strip a:hover {
+  color: var(--accent);
+}
+
+.hero-scroll {
+  margin-left: auto;
+  color: var(--text);
+  opacity: 0.55;
+  animation: scroll-bounce 2.2s ease-in-out infinite;
+}
+
+@keyframes scroll-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
 }
 
 .hero-actions {
   display: flex;
   gap: 12px;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .btn {
@@ -383,33 +673,151 @@ const navLinks = [
   padding: 80px 24px;
 }
 
-.section-alt {
-  background: var(--accent-bg);
-}
-
 .section-inner {
   max-width: 1120px;
   margin: 0 auto;
 }
 
-.section-title {
-  font-size: 32px;
-  letter-spacing: -0.5px;
-  margin: 0 0 40px;
-  color: var(--text-h);
+/* 编辑式区块头：编号居左 + 弹性引导线 + 说明居右 */
+.sec-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 56px;
 }
 
-/* ===== 超立方体展示 ===== */
-.hypercube-section {
-  padding: 0 24px 80px;
+.sec-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border) 0%, transparent 92%);
+  transform: translateY(-6px);
+  min-width: 40px;
+}
+
+.sec-title {
+  font-size: 30px;
+  letter-spacing: -0.5px;
+  margin: 0;
+  color: var(--text-h);
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.sec-no {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+
+.sec-guide {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text);
+  max-width: 340px;
+  text-align: right;
+}
+
+.sec-guide.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: var(--text);
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+/* ===== 深夜实验室 ===== */
+.lab-section {
+  position: relative;
+  padding: 80px 24px 110px;
+}
+
+.lab-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 64px;
+  align-items: center;
+}
+
+.lab-body {
+  min-width: 0;
+}
+
+.lab-motto {
+  margin: 0 0 36px;
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+
+.lab-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.skill-chip {
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  color: var(--text-h);
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.skill-chip:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.lab-about {
+  max-width: 480px;
+  color: var(--text);
+  line-height: 1.8;
+}
+
+.lab-about-title {
+  font-size: 15px;
+  letter-spacing: 3px;
+  color: var(--text-h);
+  margin: 0 0 14px;
+}
+
+.lab-cta {
+  display: inline-block;
+  margin-top: 36px;
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: var(--accent);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.lab-cta:hover {
+  opacity: 0.8;
 }
 
 .hypercube-inner {
   position: relative;
   width: 100%;
-  max-width: 480px;
+  max-width: 440px;
   aspect-ratio: 1;
-  margin: 0 auto;
+}
+
+.lab-caption {
+  margin: 8px 0 0;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--text);
+  opacity: 0.7;
 }
 
 /* ===== 页脚 ===== */
@@ -432,6 +840,19 @@ const navLinks = [
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.footer-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-h);
+  margin: 0;
 }
 
 .footer-copy {
@@ -460,40 +881,82 @@ const navLinks = [
 @media (max-width: 768px) {
   .hero {
     min-height: 90vh;
+    padding: 72px 20px 0;
   }
 
-  .hero {
-    padding: 40px 20px 50px;
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
   }
 
-  .hero-layout {
-    flex-direction: column;
-    gap: 24px;
-  }
-
-  .hero-right {
-    text-align: center;
+  .hero-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px 28px;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding: 20px 0 0;
   }
 
   .hero-title {
-    font-size: 36px;
+    font-size: 40px;
   }
 
   .hero-desc {
     font-size: 16px;
   }
 
+  .hero-sub {
+    font-size: 18px;
+  }
+
+  .hero-strip {
+    flex-wrap: wrap;
+    gap: 12px 24px;
+  }
+
+  .hero-scroll {
+    margin-left: 0;
+  }
+
   .section {
-    padding: 50px 20px;
+    padding: 56px 20px;
   }
 
-  .hypercube-section {
-    padding: 0 20px 50px;
+  .lab-section {
+    padding: 56px 20px 80px;
   }
 
-  .section-title {
-    font-size: 26px;
-    margin-bottom: 28px;
+  .sec-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 40px;
+  }
+
+  .sec-line {
+    flex: none;
+    width: 100%;
+    transform: none;
+    min-width: 0;
+  }
+
+  .sec-guide {
+    text-align: left;
+    max-width: none;
+  }
+
+  .lab-grid {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+
+  .lab-motto {
+    font-size: 18px;
+  }
+
+  .lab-about {
+    margin-top: 0;
   }
 
   .footer-inner {
@@ -504,7 +967,7 @@ const navLinks = [
 
   .hero-actions {
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
   }
 }
 </style>
