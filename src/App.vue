@@ -216,9 +216,6 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
     <!-- 星空背景 -->
     <Dark_more @switchToLight="onSwitchToLight" />
 
-    <!-- 无人机石头大战 -->
-    <DroneGame v-if="gameVisible" />
-
     <!-- 留言气球：仅白昼模式渲染，挂在 Hero 之上漂浮 -->
     <Message_balloon ref="balloonRef" @day="onDayChange" />
 
@@ -246,13 +243,13 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
     <section class="hero">
       <div class="hero-grid">
         <div class="hero-main">
-          <p class="hero-tag hero-reveal">前端开发者 · 白日梦想家</p>
+          <p class="hero-tag hero-reveal">Web开发者 · 白日梦想家</p>
           <h1 class="hero-title hero-type" data-type-delay="130">你好，我是<br /><span class="accent">JunLin</span></h1>
           <p class="hero-sub hero-reveal">把想法做成看得见的东西</p>
-          <p class="hero-desc hero-reveal">前端开发者，专注动效与交互。</p>
+          <p class="hero-desc hero-reveal">前端开发者，做有趣的网站。</p>
           <div class="hero-actions hero-reveal">
-            <a href="#portfolio" class="btn btn-primary">查看作品</a>
-            <a href="#lab" class="btn btn-secondary">深夜实验室</a>
+            <a href="#portfolio" class="btn btn-primary">一点示例</a>
+            <a href="#lab" class="btn btn-secondary">神奇妙妙屋</a>
           </div>
         </div>
         <aside class="hero-meta hero-reveal">
@@ -263,7 +260,7 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
       <div class="hero-strip hero-reveal">
         <a href="mailto:hello@junlin.dev">hello@junlin.dev</a>
         <a href="#">GitHub ↗</a>
-        <span class="hero-scroll">↓ 滚动进入这座城市</span>
+        <span class="hero-scroll">↓ 继续探索</span>
       </div>
     </section>
 
@@ -288,9 +285,9 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
         </div>
 
         <div class="sec-head reveal">
-          <h2 class="sec-title"><span class="sec-no">02</span>深夜实验室</h2>
+          <h2 class="sec-title"><span class="sec-no">02</span>神奇妙妙屋</h2>
           <span class="sec-line" aria-hidden="true"></span>
-          <p class="sec-guide">把代码当成玩具，把深夜留给实验。</p>
+          <p class="sec-guide">代码并不死板，留下你的想法。</p>
         </div>
 
         <div class="lab-grid reveal">
@@ -298,14 +295,14 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
             <div class="hypercube-inner">
               <HyperCube />
             </div>
-            <p class="lab-caption">可交互 · 拖拽旋钮调色</p>
+            <p class="lab-caption">可交互 · 拖拽旋钮调整参数</p>
           </div>
           <div class="lab-body">
-            <p class="lab-motto">「白天是程序，深夜是魔法」</p>
+            <p class="lab-motto">「白天是工作，晚上是想法」</p>
             <div class="lab-about">
               <h3 class="lab-about-title">关于我</h3>
               <p>
-                自 2022 年起自学前端，沉迷于动效与交互，喜欢把东西做得“能玩”。
+                我喜欢研究动效，我希望把网站做得“能玩”。
               </p>
             </div>
             <div class="lab-tags">
@@ -323,7 +320,7 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
       <div class="footer-inner">
         <div class="footer-brand">
           <p class="footer-name">JunLin · 独立创作者</p>
-          <p class="footer-copy">&copy; 2026 JunLin · 用代码和好奇心搭建</p>
+          <p class="footer-copy">&copy; 2026 JunLin · 用代码和想法搭建</p>
         </div>
         <div class="footer-links">
           <a href="mailto:hello@junlin.dev">hello@junlin.dev</a>
