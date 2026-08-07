@@ -7,12 +7,15 @@ import PortfolioCarousel from './components/PortfolioCarousel.vue'
 import HyperCube from './components/HyperCube.vue'
 import PendantLight from './components/PendantLight.vue'
 import loding from './components/loding.vue'
+import Message_balloon from './components/Message_balloon.vue'
 
 const loadingDone = ref(false)
 const loadingMode = ref('day')
 const loadingKey = ref(0)
 const transitioning = ref(false) // 是否正在播放切换动画
 const gameVisible = ref(true)    // 控制小游戏组件挂载/销毁
+const isDay = ref(true)          // 白昼模式标记（留言按钮只在白天显示）
+const balloonRef = ref(null)     // 留言气球组件实例引用
 
 // 每次刷新都从白昼模式开始
 
@@ -38,6 +41,16 @@ function onSwitchToLight() {
   loadingMode.value = 'day'
   lampKey.value++
   gameVisible.value = true
+}
+
+// 打开留言气球弹窗（顶部导航与页脚按钮共用）
+function openBalloonModal() {
+  balloonRef.value?.open()
+}
+
+// 白天/黑夜同步：黑夜时隐藏留言按钮（气球组件自身也会隐藏）
+function onDayChange(day) {
+  isDay.value = day
 }
 
 /* ===== Hero 入场序列：文字逐字打出，其余元素依次浮现 ===== */
@@ -206,6 +219,9 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
     <!-- 无人机石头大战 -->
     <DroneGame v-if="gameVisible" />
 
+    <!-- 留言气球：仅白昼模式渲染，挂在 Hero 之上漂浮 -->
+    <Message_balloon ref="balloonRef" @day="onDayChange" />
+
     <!-- 导航栏 -->
     <header class="navbar">
       <div class="navbar-inner">
@@ -214,6 +230,9 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
           <a v-for="link in navLinks" :key="link.label" :href="link.href" class="nav-link">
             {{ link.label }}
           </a>
+          <button v-if="isDay" class="nav-link balloon-btn" @click="openBalloonModal">
+            🎈 留言
+          </button>
         </nav>
       </div>
     </header>
@@ -309,6 +328,9 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
         <div class="footer-links">
           <a href="mailto:hello@junlin.dev">hello@junlin.dev</a>
           <a href="#">GitHub</a>
+          <button v-if="isDay" class="nav-link balloon-btn" @click="openBalloonModal">
+            🎈 留言
+          </button>
         </div>
       </div>
     </footer>
@@ -463,6 +485,22 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
 }
 
 .nav-link:hover {
+  color: var(--accent);
+}
+
+/* 留言按钮：无边框按钮，视觉与导航链接一致 */
+.balloon-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--text);
+  transition: color 0.2s;
+}
+
+.balloon-btn:hover {
   color: var(--accent);
 }
 
