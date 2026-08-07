@@ -295,12 +295,16 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
             <div class="hypercube-inner">
               <HyperCube />
             </div>
-            <p class="lab-caption">可交互 · 拖拽旋钮调整参数</p>
+            <p class="lab-caption">拖拽旋钮调整参数</p>
           </div>
           <div class="lab-body">
             <p class="lab-motto">「白天是工作，晚上是想法」</p>
             <div class="lab-about">
-              <h3 class="lab-about-title">关于我</h3>
+              <!-- 白天/黑夜双态标题：CSS 按 .dark-mode 切换，淡闪烁提示交互 -->
+              <h3 class="lab-about-title">
+                <span class="title-day">打破灯泡让我们继续</span>
+                <span class="title-night">点击月亮回到白昼</span>
+              </h3>
               <p>
                 我喜欢研究动效，我希望把网站做得“能玩”。
               </p>
@@ -822,6 +826,27 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
   letter-spacing: 3px;
   color: var(--text-h);
   margin: 0 0 14px;
+  /* 淡淡的呼吸闪烁，提示该处可交互 */
+  animation: title-flicker 2.6s ease-in-out infinite;
+}
+
+/* 白天文案默认显示，黑夜文案隐藏 */
+.title-night {
+  display: none;
+}
+
+/* 黑夜模式：切换文案 */
+.dark-mode .title-day {
+  display: none;
+}
+
+.dark-mode .title-night {
+  display: inline;
+}
+
+@keyframes title-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 .lab-cta {
