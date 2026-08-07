@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { makeFragments } from '../composables/burst.js'
 
 const emit = defineEmits(['broken'])
 
@@ -207,20 +208,13 @@ const fragments = reactive([])
 
 function createFragments() {
   fragments.length = 0
-  const count = 10
-  for (let i = 0; i < count; i++) {
-    const angle = (360 / count) * i + (Math.random() * 30 - 15)
-    const dist = 40 + Math.random() * 70
-    const rad = (angle * Math.PI) / 180
-    const tx = Math.cos(rad) * dist
-    const ty = Math.sin(rad) * dist
-    const rot = Math.random() * 720 - 360
-    const size = 4 + Math.random() * 8
-    const delay = Math.random() * 80
-    const colors = ['#FFD43B', '#E6A800', '#FFE066', '#FFF', '#B0B0B0']
-    const color = colors[Math.floor(Math.random() * colors.length)]
-    fragments.push({ tx, ty, rot, size, delay, color, id: i })
-  }
+  fragments.push(...makeFragments({
+    count: 10,
+    distMin: 40,
+    distMax: 110,
+    sizeMin: 4,
+    sizeMax: 12,
+  }))
 }
 
 const sparks = reactive([])
@@ -473,20 +467,6 @@ onBeforeUnmount(() => {
   opacity: 1;
   animation: shatter 0.7s var(--delay) ease-out forwards;
   box-shadow: 0 0 4px var(--color);
-}
-
-@keyframes shatter {
-  0% {
-    transform: translate(0, 0) rotate(0deg) scale(1);
-    opacity: 1;
-  }
-  60% {
-    opacity: 0.9;
-  }
-  100% {
-    transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.3);
-    opacity: 0;
-  }
 }
 
 /* ===== 闪光 ===== */

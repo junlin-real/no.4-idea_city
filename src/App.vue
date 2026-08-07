@@ -1,19 +1,17 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import gsap from 'gsap'
-import Dark_more from './components/Dark_more.vue'
-import DroneGame from './components/DroneGame.vue'
+import DarkMore from './components/DarkMore.vue'
 import PortfolioCarousel from './components/PortfolioCarousel.vue'
 import HyperCube from './components/HyperCube.vue'
 import PendantLight from './components/PendantLight.vue'
-import loding from './components/loding.vue'
-import Message_balloon from './components/Message_balloon.vue'
+import Loading from './components/Loading.vue'
+import MessageBalloon from './components/MessageBalloon.vue'
 
 const loadingDone = ref(false)
 const loadingMode = ref('day')
 const loadingKey = ref(0)
 const transitioning = ref(false) // 是否正在播放切换动画
-const gameVisible = ref(true)    // 控制小游戏组件挂载/销毁
 const isDay = ref(true)          // 白昼模式标记（留言按钮只在白天显示）
 const balloonRef = ref(null)     // 留言气球组件实例引用
 
@@ -23,7 +21,6 @@ const lampKey = ref(0)
 
 // 吊灯打破 → 直接坠入黑夜
 function onLampBroken() {
-  gameVisible.value = false
   document.documentElement.classList.add('dark-mode')
   loadingMode.value = 'night'
   loadingKey.value++
@@ -40,7 +37,6 @@ function onSwitchToLight() {
   loadingDone.value = false
   loadingMode.value = 'day'
   lampKey.value++
-  gameVisible.value = true
 }
 
 // 打开留言气球弹窗（顶部导航与页脚按钮共用）
@@ -111,9 +107,6 @@ watch(loadingDone, async (done) => {
     fadeEls.forEach((el) => el.classList.remove('hero-reveal'))
     return
   }
-
-  // 打字前缓存完整 HTML（含 <br>、accent 高亮），便于减弱动效时直接恢复
-  if (typeEl) typeEl.dataset.fullText = typeEl.innerHTML
 
   // 编排：① 标签淡入 → ② 标题打字 → ③ 其余依次淡入
   const reveal = (els, startDelay = 0) => {
@@ -207,17 +200,17 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
 <template>
   <div class="site">
     <!-- 加载动画 -->
-    <loding
+    <Loading
       v-if="!loadingDone || transitioning"
       :key="loadingKey"
       :mode="loadingMode"
       @done="transitioning ? onTransitionDone() : loadingDone = true"
     />
     <!-- 星空背景 -->
-    <Dark_more @switchToLight="onSwitchToLight" />
+    <DarkMore @switchToLight="onSwitchToLight" />
 
     <!-- 留言气球：仅白昼模式渲染，挂在 Hero 之上漂浮 -->
-    <Message_balloon ref="balloonRef" @day="onDayChange" />
+    <MessageBalloon ref="balloonRef" @day="onDayChange" />
 
     <!-- 导航栏 -->
     <header class="navbar">
@@ -312,7 +305,7 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
             <div class="lab-tags">
               <span v-for="tag in skillTags" :key="tag" class="skill-chip">{{ tag }}</span>
             </div>
-            <a href="#contact" class="lab-cta">把灯泡打破，我们聊聊 ↓</a>
+            <a href="#contact" class="lab-cta">更多的想法？欢迎联系 ↓</a>
           </div>
         </div>
       </div>
@@ -515,7 +508,7 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
   position: absolute;
   inset: 0;
   z-index: -3;
-  background: url('/sun_city.png') center top / 100% auto no-repeat;
+  background: url('/sun_city.webp') center top / 100% auto no-repeat;
   opacity: 1;
   transition: opacity 0.4s ease;
   pointer-events: none;
@@ -539,7 +532,7 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
   position: absolute;
   inset: 0;
   z-index: -3;
-  background: url('/city3.png') center top / 100% auto no-repeat;
+  background: url('/city3.webp') center top / 100% auto no-repeat;
   opacity: 0;
   transition: opacity 0.4s ease;
   pointer-events: none;

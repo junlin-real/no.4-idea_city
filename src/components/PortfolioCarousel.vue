@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import Project_Card from './Project_Card.vue'
+import ProjectCard from './ProjectCard.vue'
 import { portfolioItems } from './projects.js'
 
 const items = portfolioItems
@@ -20,14 +20,13 @@ let momentumFrame = null
 let isDragging = false
 let dragStartX = 0
 let dragStartRotation = 0
-let velocityTracker = { x: 0, time: 0 }
 let lastDragX = 0
 let lastDragTime = 0
 let velocity = 0
 
 // 按项目数量均匀分布角度，所有卡片同时可见
 const anglePerCard = 360 / items.length
-const CARD_HALF = 110 // 卡片半宽（Project_Card 220px）
+const CARD_HALF = 110 // 卡片半宽（ProjectCard 220px）
 const SIDE_GAP = 24 // 卡片与视口边缘的留白
 
 function getCardStyle(index) {
@@ -141,7 +140,6 @@ function onPointerDown(e) {
   lastDragX = e.clientX
   lastDragTime = Date.now()
   velocity = 0
-  velocityTracker = { x: e.clientX, time: Date.now() }
   stopAuto()
   stopMomentum()
   e.preventDefault()
@@ -170,13 +168,6 @@ function onPointerMove(e) {
 function onPointerUp() {
   if (!isDragging) return
   isDragging = false
-
-  // 用最后几次移动的平均速度
-  const now = Date.now()
-  const dt = now - lastDragTime
-  if (dt < 80) {
-    // 速度已经通过 onPointerMove 持续更新
-  }
 
   if (Math.abs(velocity) > 2) {
     startMomentum()
@@ -240,7 +231,7 @@ onBeforeUnmount(() => {
         :style="getCardStyle(index)"
         @click.stop="openModal(item)"
       >
-        <Project_Card
+        <ProjectCard
           :title="item.title"
           :description="item.description"
           :tags="item.tags"

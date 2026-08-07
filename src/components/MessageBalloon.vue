@@ -150,7 +150,7 @@
           ></textarea>
           <div class="modal-foot">
             <span class="modal-count">{{ draft.length }}/200</span>
-            <button class="modal-submit" :disabled="!draft.trim()" @click="submitMessage">
+            <button class="modal-submit" :disabled="submitting || !draft.trim()" @click="submitMessage">
               放飞 🎈
             </button>
           </div>
@@ -341,7 +341,7 @@ function launch(msg, force = false, isEaster = false) {
     swayAmp = 10 + Math.random() * 14
   }
 
-  balloons.value.push({
+  const balloon = {
     key,
     msg,
     preview: msg.content.slice(0, 5),           // 气球上显示留言开头几个字
@@ -353,15 +353,16 @@ function launch(msg, force = false, isEaster = false) {
     special: force, // 特殊放飞（留言提交）的气球才有入场特效
     spawned: false,
     isEaster, // 彩蛋气球：闪电 SVG 造型，无光晕、无火圈
-  })
+  }
+  balloons.value.push(balloon)
   runtime.set(key, {
+    balloon,
     x: spot.x,
     y: spot.y,
     vx,
     vy,
     phase: Math.random() * Math.PI * 2,
     swayAmp,
-    swaySpeed: 0.6 + Math.random() * 1.2,
     swaySpeed: 0.6 + Math.random() * 1.2,
     // 绳子摆锤状态：theta 为摆角（0 = 垂直下垂），thetaVel 为角速度
     theta: (Math.random() - 0.5) * 0.4,
@@ -383,8 +384,11 @@ function bindBalloonEl(key, el) {
 
 // 回收飞出视界的气球：从渲染列表与运动表移除，再从池里补新
 function recycle(key) {
-  const idx = balloons.value.findIndex((b) => b.key === key)
-  if (idx >= 0) balloons.value.splice(idx, 1)
+  const r = runtime.get(key)
+  if (r?.balloon) {
+    const idx = balloons.value.indexOf(r.balloon)
+    if (idx >= 0) balloons.value.splice(idx, 1)
+  }
   runtime.delete(key)
   // 未满员且池里有货 → 补一个新气球（保持"视图内恒 ≤10"）
   if (balloons.value.length < MAX_ON_SCREEN) launch(pickFromPool())
@@ -407,7 +411,7 @@ function tick(now) {
     if (r.el) {
       r.el.style.transform = `translate3d(${r.x}px, ${r.y}px, 0) rotate(${Math.sin(r.phase * 0.7) * 5}deg)`
       // 留言放飞的气球首次进入视口 → 触发入场特效（光环 + 星星，只播一次）
-      const b = balloons.value.find((x) => x.key === key)
+      const b = r.balloon
       if (b && b.special && !b.spawned && r.x >= 0 && r.y <= window.innerHeight) {
         b.spawned = true
         // 特效播完后移除特效元素，避免永久滞留 DOM（3s 足够动画播完）
@@ -494,22 +498,35 @@ async function onLike(balloon) {
   }
 }
 
-// ---------- 烟花（canvas 粒子爆发，从气球位置喷出） ----------
-function fireworks(px, py) {
+// ---------- 烟花（共享粒子系统：多个烟花并发互不干扰，粒子清空后自动停帧） ----------
+let fxParticles = []
+let fxRaf = 0
+let fxLastT = 0
+
+// 仅在画布尺寸变化时重置（避免每次点赞清掉正在播放的粒子）
+function prepareFxCanvas() {
   const canvas = fxCanvasRef.value
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
+  if (!canvas) return null
   const dpr = window.devicePixelRatio || 1
-  canvas.width = window.innerWidth * dpr
-  canvas.height = window.innerHeight * dpr
-  // setTransform 整体重置，避免多次调用 scale 累积放大
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  const w = window.innerWidth
+  const h = window.innerHeight
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+    canvas.width = w * dpr
+    canvas.height = h * dpr
+    canvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0)
+  }
+  return canvas.getContext('2d')
+}
+
+function fireworks(px, py) {
+  const ctx = prepareFxCanvas()
+  if (!ctx) return
 
   const colors = ['#ff5f6d', '#ffc371', '#5eead4', '#a78bfa', '#fbbf24', '#f472b6']
-  const particles = Array.from({ length: 80 }, () => {
+  for (let i = 0; i < 80; i++) {
     const angle = Math.random() * Math.PI * 2
     const speed = 120 + Math.random() * 260
-    return {
+    fxParticles.push({
       x: px,
       y: py,
       vx: Math.cos(angle) * speed,
@@ -518,36 +535,52 @@ function fireworks(px, py) {
       decay: 0.012 + Math.random() * 0.02,
       size: 2 + Math.random() * 3.5,
       color: colors[Math.floor(Math.random() * colors.length)],
-    }
-  })
-
-  const start = performance.now()
-  function draw(now) {
-    const t = (now - start) / 1000
-    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
-    for (const p of particles) {
-      if (p.life <= 0) continue
-      p.vy += 320 * 0.016 // 简单重力
-      p.x += p.vx * 0.016
-      p.y += p.vy * 0.016
-      p.life -= p.decay
-      ctx.globalAlpha = Math.max(p.life, 0)
-      ctx.fillStyle = p.color
-      ctx.beginPath()
-      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
-      ctx.fill()
-    }
-    ctx.globalAlpha = 1
-    if (t < 1.6) requestAnimationFrame(draw)
-    else ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
+    })
   }
-  requestAnimationFrame(draw)
+
+  if (!fxRaf) {
+    fxLastT = performance.now()
+    fxRaf = requestAnimationFrame(fxDraw)
+  }
+}
+
+function fxDraw(now) {
+  const ctx = prepareFxCanvas()
+  const dt = Math.min((now - fxLastT) / 1000, 0.05)
+  fxLastT = now
+
+  if (ctx) ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
+  for (let i = fxParticles.length - 1; i >= 0; i--) {
+    const p = fxParticles[i]
+    if (p.life <= 0) { fxParticles.splice(i, 1); continue }
+    p.vy += 320 * dt // 简单重力
+    p.x += p.vx * dt
+    p.y += p.vy * dt
+    p.life -= p.decay * dt * 60
+    ctx.globalAlpha = Math.max(p.life, 0)
+    ctx.fillStyle = p.color
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  if (ctx) ctx.globalAlpha = 1
+
+  if (fxParticles.length) {
+    fxRaf = requestAnimationFrame(fxDraw)
+  } else {
+    fxRaf = 0
+    if (ctx) ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
+  }
 }
 
 // ---------- 留言弹窗 ----------
+const submitting = ref(false) // 提交防抖：连点不会重复放飞
+
 function submitMessage() {
+  if (submitting.value) return
   const content = draft.value.trim()
   if (!content) return
+  submitting.value = true
   // 乐观释放：先放飞，失败再回滚
   const optimistic = { id: Date.now(), content, like_count: 0 }
   launch(optimistic, true) // force=true：特殊放飞，突破 10 上限，原气球不动
@@ -588,6 +621,7 @@ function submitMessage() {
         }, 420)
       }
     })
+    .finally(() => { submitting.value = false })
 }
 
 // ---------- 白天/黑夜切换：黑夜隐藏并暂停，白天恢复 ----------
@@ -627,6 +661,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   cancelAnimationFrame(rafId)
+  if (fxRaf) cancelAnimationFrame(fxRaf)
   darkObserver?.disconnect()
   bubbleTimers.forEach((t) => clearTimeout(t))
   bubbleTimers.clear()

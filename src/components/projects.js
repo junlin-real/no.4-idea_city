@@ -1,4 +1,4 @@
-//此组件用于为Project_Card提供内容
+// 此组件用于为 ProjectCard 提供内容
 export const portfolioItems = [
   {
     title: '项目名称1',

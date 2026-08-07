@@ -71,6 +71,7 @@
 
 <script setup>
 import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
+import { makeFragments } from '../composables/burst.js'
 
 const emit = defineEmits(['switchToLight'])
 
@@ -86,20 +87,14 @@ function checkDark() {
 
 function createFragments() {
   fragments.length = 0
-  const count = 12
-  for (let i = 0; i < count; i++) {
-    const angle = (360 / count) * i + (Math.random() * 30 - 15)
-    const dist = 80 + Math.random() * 100
-    const rad = (angle * Math.PI) / 180
-    const tx = Math.cos(rad) * dist
-    const ty = Math.sin(rad) * dist
-    const rot = Math.random() * 720 - 360
-    const size = 6 + Math.random() * 12
-    const delay = Math.random() * 80
-    const colors = ['#fffbd0', '#fff47d', '#f4cc35', '#ffe54f', '#fff']
-    const color = colors[Math.floor(Math.random() * colors.length)]
-    fragments.push({ tx, ty, rot, size, delay, color, id: i })
-  }
+  fragments.push(...makeFragments({
+    count: 12,
+    distMin: 80,
+    distMax: 180,
+    sizeMin: 6,
+    sizeMax: 18,
+    colors: ['#fffbd0', '#fff47d', '#f4cc35', '#ffe54f', '#fff'],
+  }))
 }
 
 function triggerShake() {
@@ -183,6 +178,8 @@ class Star {
       : roll < 0.58 ? '#b5e8e0' // 淡青
       : roll < 0.7 ? '#ffffff' // 纯白
       : '#ffe4f0' // 粉白（主色）
+    // 颜色固定不变，构造时解析一次分量，拖尾渐变逐帧复用，省掉逐帧 parseInt
+    this.rgb = hexToRgb(this.color)
   }
 
   // 位移 = (全局速度 × 视差系数 + 固有漂移) × dt；出界按速度方向回收
@@ -235,7 +232,7 @@ class Star {
       const ny = tailX / len
       const hw = lw / 2
       const tw = hw * 0.08 // 尾端近尖端
-      const [r, g, b] = hexToRgb(this.color)
+      const [r, g, b] = this.rgb
       const grad = ctx.createLinearGradient(this.x, this.y, this.x + tailX, this.y + tailY)
       grad.addColorStop(0, `rgba(${r},${g},${b},${alpha})`)
       grad.addColorStop(0.25, `rgba(${r},${g},${b},${alpha * 0.75})`)
@@ -450,20 +447,6 @@ onMounted(() => {
   opacity: 1;
   animation: shatter 0.7s var(--delay) ease-out forwards;
   box-shadow: 0 0 6px var(--color);
-}
-
-@keyframes shatter {
-  0% {
-    transform: translate(0, 0) rotate(0deg) scale(1);
-    opacity: 1;
-  }
-  60% {
-    opacity: 0.9;
-  }
-  100% {
-    transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.3);
-    opacity: 0;
-  }
 }
 
 /* ===== 闪光 ===== */

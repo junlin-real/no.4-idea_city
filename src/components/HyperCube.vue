@@ -124,27 +124,26 @@ function onBtnUp(e, ctl) {
   })
 }
 
-// --- 4D math helpers ---
+// --- 4D math helpers（全部原地写缓冲，避免每帧对象分配） ---
 class Vec4 {
   constructor(x, y, z, w) { this.x = x; this.y = y; this.z = z; this.w = w }
 }
 
-function matMulVec4(mat, v) {
-  return new Vec4(
-    mat[0][0] * v.x + mat[0][1] * v.y + mat[0][2] * v.z + mat[0][3] * v.w,
-    mat[1][0] * v.x + mat[1][1] * v.y + mat[1][2] * v.z + mat[1][3] * v.w,
-    mat[2][0] * v.x + mat[2][1] * v.y + mat[2][2] * v.z + mat[2][3] * v.w,
-    mat[3][0] * v.x + mat[3][1] * v.y + mat[3][2] * v.z + mat[3][3] * v.w,
-  )
+function matMulVec4Into(mat, v, out) {
+  out.x = mat[0][0] * v.x + mat[0][1] * v.y + mat[0][2] * v.z + mat[0][3] * v.w
+  out.y = mat[1][0] * v.x + mat[1][1] * v.y + mat[1][2] * v.z + mat[1][3] * v.w
+  out.z = mat[2][0] * v.x + mat[2][1] * v.y + mat[2][2] * v.z + mat[2][3] * v.w
+  out.w = mat[3][0] * v.x + mat[3][1] * v.y + mat[3][2] * v.z + mat[3][3] * v.w
+  return out
 }
 
-function mul4(A, B) {
-  const C = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
+function mul4Into(A, B, out) {
   for (let i = 0; i < 4; i++)
-    for (let j = 0; j < 4; j++)
-      for (let k = 0; k < 4; k++)
-        C[i][j] += A[i][k] * B[k][j]
-  return C
+    for (let j = 0; j < 4; j++) {
+      out[i][j] = 0
+      for (let k = 0; k < 4; k++) out[i][j] += A[i][k] * B[k][j]
+    }
+  return out
 }
 
 function rotZW(a) {
@@ -167,17 +166,30 @@ function rot3Y(angle) {
   return [[c,0,s],[0,1,0],[-s,0,c]]
 }
 
-function mul3(mat, v) {
-  return [
-    mat[0][0] * v[0] + mat[0][1] * v[1] + mat[0][2] * v[2],
-    mat[1][0] * v[0] + mat[1][1] * v[1] + mat[1][2] * v[2],
-    mat[2][0] * v[0] + mat[2][1] * v[1] + mat[2][2] * v[2],
-  ]
+function mul3Into(mat, v, out) {
+  const x = v[0], y = v[1], z = v[2]
+  out[0] = mat[0][0] * x + mat[0][1] * y + mat[0][2] * z
+  out[1] = mat[1][0] * x + mat[1][1] * y + mat[1][2] * z
+  out[2] = mat[2][0] * x + mat[2][1] * y + mat[2][2] * z
+  return out
 }
 
 // --- Rotation state (two fixed planes: ZW + XW) ---
 let outerAngleZW = 0, outerAngleXW = 0
 let innerAngleZW = 0, innerAngleXW = 0
+
+// --- 预分配渲染缓冲：顶点、旋转矩阵、投影结果（每帧复用，零分配） ---
+const BASE_VERTICES = [
+  [-1,-1,-1], [ 1,-1,-1], [ 1, 1,-1], [-1, 1,-1],
+  [-1,-1, 1], [ 1,-1, 1], [ 1, 1, 1], [-1, 1, 1],
+]
+// 16 顶点：前 8 内层（w=+spacing）、后 8 外层（w=-spacing）；x/y/z 固定，仅 w 每帧更新
+const verts = BASE_VERTICES.flatMap(([x, y, z]) => [new Vec4(x, y, z, 0), new Vec4(x, y, z, 0)])
+const rotOuter4 = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
+const rotInner4 = [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
+const proj4 = Array.from({ length: 16 }, () => new Vec4(0, 0, 0, 0))
+const proj3 = Array.from({ length: 16 }, () => [0, 0, 0])
+const proj2 = Array.from({ length: 16 }, () => [0, 0])
 
 // --- View state ---
 let viewAngleX = Math.PI / 3
@@ -240,48 +252,36 @@ function render() {
   innerAngleZW += 0.01 * innerSpeed.value
   innerAngleXW += 0.007 * innerSpeed.value
 
-  const rotOuter4 = mul4(rotXW(outerAngleXW), rotZW(outerAngleZW))
-  const rotInner4 = mul4(rotXW(innerAngleXW), rotZW(innerAngleZW))
+  // 顶点 x/y/z 固定，仅 w 分量（±spacing）每帧更新
+  for (let i = 0; i < 16; i++) verts[i].w = i < 8 ? sp : -sp
 
-  // Build vertices with spacing
-  const verts = [
-    new Vec4(-1,-1,-1, sp), new Vec4( 1,-1,-1, sp),
-    new Vec4( 1, 1,-1, sp), new Vec4(-1, 1,-1, sp),
-    new Vec4(-1,-1, 1, sp), new Vec4( 1,-1, 1, sp),
-    new Vec4( 1, 1, 1, sp), new Vec4(-1, 1, 1, sp),
-    new Vec4(-1,-1,-1,-sp), new Vec4( 1,-1,-1,-sp),
-    new Vec4( 1, 1,-1,-sp), new Vec4(-1, 1,-1,-sp),
-    new Vec4(-1,-1, 1,-sp), new Vec4( 1,-1, 1,-sp),
-    new Vec4( 1, 1, 1,-sp), new Vec4(-1, 1, 1,-sp),
-  ]
+  mul4Into(rotXW(outerAngleXW), rotZW(outerAngleZW), rotOuter4)
+  mul4Into(rotXW(innerAngleXW), rotZW(innerAngleZW), rotInner4)
 
-  const projected3D = []
-  for (let i = 0; i < 16; i++) {
-    const mat = i < 8 ? rotInner4 : rotOuter4
-    const v = matMulVec4(mat, verts[i])
-    const wScale = 1 / (dSafe - v.w)
-    projected3D.push([v.x * wScale, v.y * wScale, v.z * wScale])
-  }
-
-  // 默认尺寸为容器较边的 0.35 倍
+  // 4D 投影到 3D：默认尺寸为容器较边的 0.35 倍（原地写缓冲）
   const scale = Math.min(W, H) * 0.35
   for (let i = 0; i < 16; i++) {
-    projected3D[i][0] *= scale
-    projected3D[i][1] *= scale
-    projected3D[i][2] *= scale
+    const mat = i < 8 ? rotInner4 : rotOuter4
+    const v = matMulVec4Into(mat, verts[i], proj4[i])
+    const wScale = 1 / (dSafe - v.w)
+    const p = proj3[i]
+    p[0] = v.x * wScale * scale
+    p[1] = v.y * wScale * scale
+    p[2] = v.z * wScale * scale
   }
 
   const rx = rot3X(viewAngleX)
   const ry = rot3Y(viewAngleY)
 
-  const projected2D = []
   const fov = 600
   for (let i = 0; i < 16; i++) {
-    let v = projected3D[i]
-    v = mul3(ry, v)
-    v = mul3(rx, v)
+    const v = proj3[i]
+    mul3Into(ry, v, v)
+    mul3Into(rx, v, v)
     const zz = v[2] + 400
-    projected2D.push({ x: v[0] * fov / (fov + zz), y: v[1] * fov / (fov + zz) })
+    const p = proj2[i]
+    p[0] = v[0] * fov / (fov + zz)
+    p[1] = v[1] * fov / (fov + zz)
   }
 
   // --- Draw ---
@@ -301,10 +301,12 @@ function render() {
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
 
-  function line(a, b) {
+  function line(i, j) {
+    const a = proj2[i]
+    const b = proj2[j]
     ctx.beginPath()
-    ctx.moveTo(cx + a.x * zoom, cy + a.y * zoom)
-    ctx.lineTo(cx + b.x * zoom, cy + b.y * zoom)
+    ctx.moveTo(cx + a[0] * zoom, cy + a[1] * zoom)
+    ctx.lineTo(cx + b[0] * zoom, cy + b[1] * zoom)
     ctx.stroke()
   }
 
@@ -312,25 +314,25 @@ function render() {
   ctx.strokeStyle = colInner
   ctx.setLineDash([8 * zoom, 5 * zoom])
   for (let i = 0; i < 4; i++) {
-    line(projected2D[i], projected2D[(i + 1) % 4])
-    line(projected2D[i + 4], projected2D[((i + 1) % 4) + 4])
-    line(projected2D[i], projected2D[i + 4])
+    line(i, (i + 1) % 4)
+    line(i + 4, ((i + 1) % 4) + 4)
+    line(i, i + 4)
   }
 
   // --- Outer cube edges (solid, outer color) ---
   ctx.strokeStyle = colOuter
   ctx.setLineDash([])
   for (let i = 0; i < 4; i++) {
-    line(projected2D[8 + i], projected2D[8 + (i + 1) % 4])
-    line(projected2D[8 + i + 4], projected2D[8 + ((i + 1) % 4) + 4])
-    line(projected2D[8 + i], projected2D[8 + i + 4])
+    line(8 + i, 8 + (i + 1) % 4)
+    line(8 + i + 4, 8 + ((i + 1) % 4) + 4)
+    line(8 + i, 8 + i + 4)
   }
 
   // --- Inter-cube connectors (dashed, midpoint color) ---
   ctx.strokeStyle = colMid
   ctx.setLineDash([8 * zoom, 5 * zoom])
   for (let i = 0; i < 8; i++) {
-    line(projected2D[i], projected2D[i + 8])
+    line(i, i + 8)
   }
   ctx.setLineDash([])
 
@@ -338,18 +340,18 @@ function render() {
   ctx.fillStyle = colInner
   const dotR = 5 * zoom
   for (let i = 0; i < 8; i++) {
-    const p = projected2D[i]
+    const p = proj2[i]
     ctx.beginPath()
-    ctx.arc(cx + p.x * zoom, cy + p.y * zoom, dotR, 0, Math.PI * 2)
+    ctx.arc(cx + p[0] * zoom, cy + p[1] * zoom, dotR, 0, Math.PI * 2)
     ctx.fill()
   }
 
   // --- Outer vertex dots ---
   ctx.fillStyle = colOuter
   for (let i = 8; i < 16; i++) {
-    const p = projected2D[i]
+    const p = proj2[i]
     ctx.beginPath()
-    ctx.arc(cx + p.x * zoom, cy + p.y * zoom, dotR, 0, Math.PI * 2)
+    ctx.arc(cx + p[0] * zoom, cy + p[1] * zoom, dotR, 0, Math.PI * 2)
     ctx.fill()
   }
 

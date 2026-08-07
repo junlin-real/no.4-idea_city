@@ -117,3 +117,18 @@ a {
 .dark-mode ::-webkit-scrollbar-corner {
   background: #111d33;
 }
+
+/* ===== 共享动效 keyframes（灯泡/月亮破碎碎片动画） ===== */
+@keyframes shatter {
+  0% {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.3);
+    opacity: 0;
+  }
+}
