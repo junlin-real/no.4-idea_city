@@ -251,8 +251,8 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
         </aside>
       </div>
       <div class="hero-strip hero-reveal">
-        <a href="mailto:hello@junlin.dev">hello@junlin.dev</a>
-        <a href="#">GitHub ↗</a>
+        <a href="mailto:wu020812@outlook.com">wu020812@outlook.com</a>
+        <a href="https://github.com/junlin-real/no.4-idea_city" target="_blank" rel="noopener">GitHub ↗</a>
         <span class="hero-scroll">↓ 继续探索</span>
       </div>
     </section>
@@ -320,8 +320,8 @@ const skillTags = ['Vue', 'GSAP', 'Canvas', 'Node.js', 'Three.js', 'CSS']
           <p class="footer-copy">&copy; 2026 JunLin · 用代码和想法搭建</p>
         </div>
         <div class="footer-links">
-          <a href="mailto:hello@junlin.dev">hello@junlin.dev</a>
-          <a href="#">GitHub</a>
+          <a href="mailto:wu020812@outlook.com">wu020812@outlook.com</a>
+          <a href="https://github.com/junlin-real/no.4-idea_city" target="_blank" rel="noopener">GitHub</a>
           <button v-if="isDay" class="nav-link balloon-btn" @click="openBalloonModal">
             🎈 留言
           </button>
